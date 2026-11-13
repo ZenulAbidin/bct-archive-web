@@ -881,7 +881,8 @@ def page_compose(q):
                 if talkimg.enabled() else "")
     body = ('%s<div class="tb"><h1 class="catbg">%s</h1><div class="pad composer" id="composer" data-key="%s" data-target="%s">'
             '<noscript><p class="warn">The composer needs JavaScript. You can also %s.</p></noscript>'
-            '%s<div class="toolbar" role="toolbar" aria-label="Formatting">%s</div>'
+            '%s<h2 class="titlebg">Preview</h2><div id="preview" class="content preview" aria-live="polite"></div>'
+            '<div class="toolbar" role="toolbar" aria-label="Formatting">%s</div>'
             '<label class="sr" for="msg">Message (BBCode)</label><textarea id="msg" rows="12" spellcheck="true"></textarea>'
             '%s'
             '<textarea id="prefill" hidden>%s</textarea>'
@@ -891,7 +892,7 @@ def page_compose(q):
             '<p class="small muted">Your draft is kept only in this browser. The text you type here is not sent to this site, and this site never asks for '
             'your Bitcointalk login. Pressing the first button copies the message and opens the real form on bitcointalk.org in a new window: '
             '<b>paste your message there and press Post.</b></p>'
-            '<h2 class="titlebg">Preview</h2><div id="preview" class="content preview" aria-live="polite"></div></div></div>'
+            '</div></div>'
             % (crumbs_html(crumbs), e(heading), e(key), e(target), act(target, "write directly on bitcointalk.org"),
                subject, tools, uploader, e(prefill)))
     return layout(heading, body, noindex=True, active="boards", scripts=("composer.js",))
