@@ -410,6 +410,16 @@ ICON_TOPIC = ('<svg class="ti %s" viewBox="0 0 16 16" width="14" height="14" ari
 ICON_PM = ('<svg class="pmi" viewBox="0 0 18 13" width="18" height="13" aria-hidden="true">'
            '<rect x=".75" y=".75" width="16.500" height="11.500" rx="1.200" fill="var(--win2)" stroke="currentColor" stroke-width="1.500"/>'
            '<path d="M1.200 1.400 9 7.600l7.800-6.200" fill="none" stroke="currentColor" stroke-width="1.500" stroke-linejoin="round"/></svg>')
+ICON_LAST = ('<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M3 1.500h6l3.500 3.500v9.500H3z" fill="var(--win2)" stroke="currentColor" stroke-width="1.200" stroke-linejoin="round"/>'
+             '<path d="M9 1.500V5h3.500" fill="none" stroke="currentColor" stroke-width="1.200" stroke-linejoin="round"/>'
+             '<path d="M5.200 10h5.300M8.300 7.700l2.300 2.300-2.300 2.300" fill="none" stroke="var(--icon-on)" stroke-width="1.700" stroke-linecap="round" stroke-linejoin="round"/></svg>')
+
+
+def go_last(tid):
+    """Small 'go to the last post' button for Last post cells."""
+    return ('<a class="golast" href="/threads/%s?last=1" title="Go to the last post" aria-label="Go to the last post">%s</a>' % (tid, ICON_LAST))
+
+
 ICON_PIN = ('<svg class="pin" viewBox="0 0 16 16" width="13" height="13" role="img" aria-label="Sticky topic"><title>Sticky topic</title>'
             '<path d="M9.800 1.200 14.800 6.200 13.400 7.600 12.300 7.200 9.700 9.800 10 13 8.600 14.400 5.300 11.100 1.700 14.700 1.300 14.300 4.900 10.700 1.600 7.400 3 6l3.200.300L8.800 3.700 8.400 2.600z"/></svg> ')
 ICON_FOLD = ('<svg class="fold" viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">'
@@ -588,8 +598,8 @@ def moderators_html(bid):
 def board_row(n, boards):
     last = '<span class="muted">No posts</span>'
     if n.get("last_thread_id"):
-        last = ('<b>Last post</b> by %s<br>in <a href="/threads/%s?last=1">%s</a><br>on %s'
-                % (user_link(n.get("last_post_username")), n["last_thread_id"],
+        last = ('%s<b>Last post</b> by %s<br>in <a href="/threads/%s?last=1">%s</a><br>on %s'
+                % (go_last(n["last_thread_id"]), user_link(n.get("last_post_username")), n["last_thread_id"],
                    e(clean_title(n.get("last_thread_title"))), when(n.get("last_post_created_at"))))
     kids = ""
     if n["kids"]:
@@ -718,13 +728,13 @@ def page_board(bid, q):
         rows.append(
             '<tr><td class="ic">%s</td><td class="info">%s<a class="tn" href="/threads/%s">%s</a>%s'
             '<div class="m-stats">Started by %s · %s replies · %s views</div>'
-            '<div class="m-last">Last post by %s, <a href="/threads/%s?last=1">%s</a></div></td>'
+            '<div class="m-last">Last post by %s, <a href="/threads/%s?last=1">%s</a> %s</div></td>'
             '%s<td class="w2 starter">%s</td><td class="w1 n">%s</td><td class="w1 n">%s</td>'
-            '<td class="last"><a href="/threads/%s?last=1">%s</a><br>by %s</td></tr>'
+            '<td class="last">%s<a href="/threads/%s?last=1">%s</a><br>by %s</td></tr>'
             % (ICON_TOPIC % hot, ICON_PIN if t.get("sticky") else "", t["id"], e(clean_title(t.get("title"))), mini, starter, num(max(0, pc - 1)),
-               num(t.get("view_count")), user_link(t.get("last_post_username")), t["id"], when(t.get("last_post_created_at")),
+               num(t.get("view_count")), user_link(t.get("last_post_username")), t["id"], when(t.get("last_post_created_at")), go_last(t["id"]),
                bump_td, starter, num(max(0, pc - 1)), num(t.get("view_count")),
-               t["id"], when(t.get("last_post_created_at")), user_link(t.get("last_post_username"))))
+               go_last(t["id"]), t["id"], when(t.get("last_post_created_at")), user_link(t.get("last_post_username"))))
     kids = ""
     if node and node["kids"]:
         kids = ('<section class="tb"><h2 class="catbg">Child Boards</h2><table class="grid boards"><tbody>%s</tbody></table></section>'

@@ -217,3 +217,5 @@ textarea#msg { width: 100%; min-height: 220px; font: 13px/1.4 var(--mono); resiz
 .utrust { display: block; margin-top: 4px; color: var(--text); text-decoration: none; } .utrust:hover { text-decoration: underline; }
 .ulinks .pm { display: inline-flex; align-items: center; } .pmi { display: block; }
 @media (max-width: 760px) { .utrust { margin: 0; } }
+.golast { float: right; margin: 1px 0 2px 6px; color: var(--muted); line-height: 0; } .golast:hover { color: var(--link); }
+.m-last .golast { float: none; display: inline-block; vertical-align: -3px; margin: 0 0 0 2px; }
