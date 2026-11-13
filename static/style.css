@@ -199,7 +199,7 @@ textarea#msg { width: 100%; min-height: 220px; font: 13px/1.4 var(--mono); resiz
 .poster .neg { color: var(--neg); }
 .stats-grid { gap: 14px 28px; align-items: start; } .stats-grid .pollt td:first-child { max-width: 300px; overflow-wrap: anywhere; }
 .upl { margin: 4px 0; align-items: center; gap: 8px; } .preview img { max-width: 100%; height: auto; }
-.sticky { font-size: 11px; color: var(--muted); }
+.pin { fill: var(--icon-on); vertical-align: -1px; }
 .fb td { vertical-align: top; } .fb .nw { white-space: nowrap; } .fb .cm { min-width: 220px; overflow-wrap: anywhere; } .fb b.pos { color: var(--pos); } .fb b.neg { color: var(--neg); } .scroll { overflow-x: auto; }
 .mods { font-size: 11px; color: var(--muted); padding-top: 1px; }
 .sort { white-space: nowrap; margin-left: 2px; } .sort a { font-size: 9px; padding: 0 1px; color: var(--muted); text-decoration: none; }

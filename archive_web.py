@@ -407,6 +407,8 @@ ICON_BOARD = ('<svg class="bi %s" viewBox="0 0 32 32" width="30" height="30" rol
               '<path class="b2" d="M26 12h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-1v3l-4-3h-7a2 2 0 0 1-2-2v-.5h7a4 4 0 0 0 4-4z"/></svg>')
 ICON_TOPIC = ('<svg class="ti %s" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">'
               '<path d="M3 1.5h7l3 3v10H3z"/><path class="b2" d="M5.5 7h5M5.5 9.5h5M5.5 12h3" fill="none"/></svg>')
+ICON_PIN = ('<svg class="pin" viewBox="0 0 16 16" width="13" height="13" role="img" aria-label="Sticky topic"><title>Sticky topic</title>'
+            '<path d="M9.800 1.200 14.800 6.200 13.400 7.600 12.300 7.200 9.700 9.800 10 13 8.600 14.400 5.300 11.100 1.700 14.700 1.300 14.300 4.900 10.700 1.600 7.400 3 6l3.200.300L8.800 3.700 8.400 2.600z"/></svg> ')
 ICON_FOLD = ('<svg class="fold" viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">'
              '<path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>')
 ICON_POST = ('<svg class="pi" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">'
@@ -716,7 +718,7 @@ def page_board(bid, q):
             '<div class="m-last">Last post by %s, <a href="/threads/%s?last=1">%s</a></div></td>'
             '%s<td class="w2 starter">%s</td><td class="w1 n">%s</td><td class="w1 n">%s</td>'
             '<td class="last"><a href="/threads/%s?last=1">%s</a><br>by %s</td></tr>'
-            % (ICON_TOPIC % hot, '<b class="sticky">Sticky:</b> ' if t.get("sticky") else "", t["id"], e(clean_title(t.get("title"))), mini, starter, num(max(0, pc - 1)),
+            % (ICON_TOPIC % hot, ICON_PIN if t.get("sticky") else "", t["id"], e(clean_title(t.get("title"))), mini, starter, num(max(0, pc - 1)),
                num(t.get("view_count")), user_link(t.get("last_post_username")), t["id"], when(t.get("last_post_created_at")),
                bump_td, starter, num(max(0, pc - 1)), num(t.get("view_count")),
                t["id"], when(t.get("last_post_created_at")), user_link(t.get("last_post_username"))))
