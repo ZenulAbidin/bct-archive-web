@@ -30,12 +30,17 @@ from datetime import datetime, timezone
 from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import bbcode
+import imgproxy
+
 API = os.environ.get("ARCHIVE_API", "http://127.0.0.1:18183").rstrip("/")
 BIND = os.environ.get("BIND", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "18190"))
 SITE = os.environ.get("SITE_NAME", "Bitcointalk Archive")
 SITE_TAG = os.environ.get("SITE_TAGLINE", "by TalkSearch")
 SOURCE_URL = os.environ.get("SOURCE_URL", "")
+TALKSEARCH_API = os.environ.get("TALKSEARCH_API", "").rstrip("/")   # optional: ranked advanced search
+BOARD_DESCRIPTIONS = os.environ.get("BOARD_DESCRIPTIONS", "")        # optional JSON file {board id: text}
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 PER_PAGE = 25           # same page size as the previous client, so old ?page=N links still match
 MAX_WINDOW = 10000      # the API cannot page topic lists / search results past this many rows
@@ -248,6 +253,13 @@ class _Balancer(HTMLParser):
         a = "".join(' %s="%s"' % (k, html.escape(_restyle(html.unescape(v or ""))
                                                  if k == "style" else html.unescape(v or ""), quote=True))
                     for k, v in attrs)
+        if tag == "img":
+            src = html.unescape(dict(attrs).get("src") or "")
+            if src.startswith(("http://", "https://")):
+                attrs = [(k, imgproxy.proxied(imgproxy.original(src)) if k == "src" else v) for k, v in attrs]
+            elif not src.startswith("/"):
+                return
+            a = "".join(' %s="%s"' % (k, html.escape(html.unescape(v or ""), quote=True)) for k, v in attrs)
         if self.tight and tag == "br":
             self.out.append('<span class="t"><br></span>')
             return
@@ -314,58 +326,129 @@ def post_body(body, tid, on_page):
     b = _LINK_RE.sub(fix, balanced(body, tight=sized))
     if sized:
         b = '<div class="tight">%s</div>' % b
-    b = b.replace("<img ", '<img loading="lazy" decoding="async" referrerpolicy="no-referrer" ')
+    b = b.replace("<img ", '<img loading="lazy" decoding="async" ')
     return b
+
+
+
+
+# --------------------------------------------------------------------------- board tree
+try:
+    DESCRIPTIONS = json.load(open(BOARD_DESCRIPTIONS, encoding="utf-8")) if BOARD_DESCRIPTIONS else {}
+except (OSError, ValueError):
+    DESCRIPTIONS = {}
+
+
+def forum():
+    """Every board as a tree (all levels), built from the API's flat list and its path strings."""
+    hit = _cache.get("#forum")
+    if hit and hit[0] > time.time():
+        return hit[1]
+    flat = api("/api/boards", {"stripped": "true"})["boards"]
+    index = api("/api/boards")
+    boards, by_path = {}, {}
+    for b in flat:
+        n = dict(b, kids=[], parent=None)
+        n["segs"] = [s.strip() for s in (b.get("description") or "").split(">")][1:]
+        boards[b["id"]] = n
+        by_path[" > ".join(n["segs"])] = b["id"]
+    for bid, n in boards.items():
+        if len(n["segs"]) > 2:
+            pid = by_path.get(" > ".join(n["segs"][:-1]))
+            if pid is not None and pid != bid:
+                n["parent"] = pid
+                boards[pid]["kids"].append(bid)
+    cats = [(c.get("name") or "", [b["id"] for b in c.get("boards", []) if b["id"] in boards])
+            for c in index.get("boards", [])]
+    f = {"boards": boards, "cats": cats, "recent": index.get("threads") or []}
+    _cache["#forum"] = (time.time() + 45, f)
+    return f
+
+
+def board_trail(bid):
+    """[(label, href|None)] from the category down to this board, parents included."""
+    boards = forum()["boards"]
+    n = boards.get(bid)
+    if not n:
+        return []
+    chain = []
+    cur = n
+    while cur:
+        chain.append((cur["name"], "/boards/%s" % cur["id"]))
+        cur = boards.get(cur["parent"]) if cur["parent"] is not None else None
+    cat = n["segs"][0] if n["segs"] else None
+    return ([(cat, "/#c-%s" % re.sub(r"[^a-z0-9]+", "-", cat.lower()))] if cat else []) + list(reversed(chain))
+
+
+# --------------------------------------------------------------------------- small pieces
+ICON_EXT = ('<svg class="ext" viewBox="0 0 16 16" width="10" height="10" aria-hidden="true">'
+            '<path d="M6 3H3v10h10v-3M9 3h4v4M13 3 7 9" fill="none" stroke="currentColor" stroke-width="1.8" '
+            'stroke-linecap="round" stroke-linejoin="round"/></svg>')
+ICON_BOARD = ('<svg class="bi %s" viewBox="0 0 32 32" width="30" height="30" role="img" aria-label="%s">'
+              '<path d="M4 7h17a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-8l-5 4v-4H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"/>'
+              '<path class="b2" d="M26 12h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-1v3l-4-3h-7a2 2 0 0 1-2-2v-.5h7a4 4 0 0 0 4-4z"/></svg>')
+ICON_TOPIC = ('<svg class="ti %s" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">'
+              '<path d="M3 1.5h7l3 3v10H3z"/><path class="b2" d="M5.5 7h5M5.5 9.5h5M5.5 12h3" fill="none"/></svg>')
+ICON_POST = ('<svg class="pi" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">'
+             '<path d="M2 2.5h12v8H8l-3.5 3v-3H2z"/></svg>')
+
+
+def bct(query):
+    return "%s?%s" % (BCT, query)
+
+
+def act(href, label, title="", cls=""):
+    """An action that happens on bitcointalk.org: opens there in a popup window (new tab without JS)."""
+    return ('<a class="pop %s" href="%s" target="_blank" rel="noopener nofollow"%s>%s%s</a>'
+            % (cls, e(href), ' title="%s"' % e(title) if title else "", label, ICON_EXT))
 
 
 def user_link(name, cls=""):
     if not name or name == "(unknown)":
         return '<span class="muted">%s</span>' % e(name or "unknown")
-    return '<a class="user %s" href="/profile/%s">%s</a>' % (cls, urllib.parse.quote(name, safe=""), e(name))
+    return '<a class="%s" href="/profile/%s">%s</a>' % (cls, urllib.parse.quote(name, safe=""), e(name))
 
 
-def trust_html(stats):
+def trust_html(stats, label="Trust: "):
     if not stats or not (stats.get("pos") or stats.get("neg")):
         return ""
     neg, pos = int(stats.get("neg") or 0), int(stats.get("pos") or 0)
-    cls = "warn" if neg > pos else ""
-    return ('<span class="trust %s" title="DefaultTrust network: trusted by %d, distrusted by %d">'
-            'Trust: <b>+%d</b> / <b>−%d</b></span>' % (cls, pos, neg, pos, neg))
+    return ('<span class="trust" title="DefaultTrust network: included by %d members, excluded by %d">'
+            '%s<b class="pos">+%d</b> / <b class="neg">−%d</b></span>' % (pos, neg, label, pos, neg))
 
 
 def avatar_html(url, name, size):
     if url:
-        return ('<img class="avatar" src="%s" alt="" width="%d" height="%d" loading="lazy">'
-                % (e(url), size, size))
-    initial = e((name or "?")[:1].upper())
-    return '<span class="avatar ph" aria-hidden="true" style="width:%dpx;height:%dpx">%s</span>' % (size, size, initial)
+        return '<img class="avatar" src="%s" alt="" width="%d" height="%d" loading="lazy">' % (e(url), size, size)
+    return ""
+
+
+def is_recent(s, hours=24):
+    d = parse_dt(s)
+    return bool(d) and (datetime.now(timezone.utc) - d).total_seconds() < hours * 3600
 
 
 def pager(base, page, pages, label, anchor=""):
-    """Numbered pagination plus a jump-to-page form. `base` already holds other query args."""
+    """SMF-style page list: Pages: [1] 2 3 ... 265, plus a jump box on long lists."""
     if pages <= 1:
-        return ""
+        return '<nav class="pages" aria-label="%s">Pages: [<b>1</b>]</nav>' % e(label)
     sep = "&amp;" if "?" in base else "?"
 
-    def link(p, text=None, rel="", cls=""):
+    def link(p, text=None, rel=""):
         href = base if p == 1 else "%s%spage=%d" % (base, sep, p)
-        return '<a href="%s%s"%s%s>%s</a>' % (
-            href, anchor, ' rel="%s"' % rel if rel else "", ' class="%s"' % cls if cls else "", text or num(p))
+        return '<a href="%s%s"%s>%s</a>' % (href, anchor, ' rel="%s"' % rel if rel else "", text or num(p))
     shown = sorted({1, 2, pages - 1, pages, page - 2, page - 1, page, page + 1, page + 2} & set(range(1, pages + 1)))
-    out = ['<nav class="pager" aria-label="%s">' % e(label)]
+    out = ['<nav class="pages" aria-label="%s">Pages: ' % e(label)]
     if page > 1:
-        out.append(link(page - 1, "‹ Prev", "prev", "step"))
+        out.append(link(page - 1, "«", "prev") + " ")
     prev = 0
     for p in shown:
         if p - prev > 1:
-            out.append('<span class="gap" aria-hidden="true">…</span>')
-        if p == page:
-            out.append('<span class="cur" aria-current="page"><span class="sr">Page </span>%s</span>' % num(p))
-        else:
-            out.append(link(p))
+            out.append('<span class="gap">…</span> ')
+        out.append('[<b aria-current="page">%s</b>] ' % num(p) if p == page else link(p) + " ")
         prev = p
     if page < pages:
-        out.append(link(page + 1, "Next ›", "next", "step"))
+        out.append(link(page + 1, "»", "next"))
     if pages > 7:
         action, _, qs = base.partition("?")
         hidden = "".join('<input type="hidden" name="%s" value="%s">' % (e(k), e(v))
@@ -377,36 +460,22 @@ def pager(base, page, pages, label, anchor=""):
     return "".join(out)
 
 
-ICON_EXT = ('<svg class="ext" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">'
-            '<path d="M6 3H3v10h10v-3M9 3h4v4M13 3 7 9" fill="none" stroke="currentColor" stroke-width="1.6" '
-            'stroke-linecap="round" stroke-linejoin="round"/></svg>')
-ICON_SEARCH = ('<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" '
-               'fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m10.5 10.5 3.5 3.5" stroke="currentColor" '
-               'stroke-width="1.8" stroke-linecap="round"/></svg>')
-
-
-def ext(href, text, cls=""):
-    return '<a class="%s" href="%s" rel="noopener nofollow">%s %s</a>' % (cls, e(href), text, ICON_EXT)
-
-
 def crumbs_html(items):
-    parts = ['<li><a href="/">Boards</a></li>']
+    parts = ['<a href="/"><b>%s</b></a>' % e(SITE)]
     for i, (label, href) in enumerate(items):
         last = i == len(items) - 1
-        if href and not last:
-            parts.append('<li><a href="%s">%s</a></li>' % (href, e(label)))
-        elif href:
-            parts.append('<li><a href="%s" aria-current="page">%s</a></li>' % (href, e(label)))
-        else:
-            parts.append("<li><span>%s</span></li>" % e(label))
-    return '<nav class="crumbs" aria-label="Breadcrumb"><ol>%s</ol></nav>' % "".join(parts)
+        text = "<b>%s</b>" % e(label) if last else e(label)
+        parts.append('<a href="%s"%s>%s</a>' % (href, ' aria-current="page"' if last else "", text) if href else text)
+    return '<nav class="crumbs" aria-label="Breadcrumb">%s</nav>' % ' <span aria-hidden="true">&gt;</span> '.join(parts)
 
 
-def layout(title, body, q="", canonical="", noindex=False, active=""):
-    full = "%s – %s" % (title, SITE) if title else "%s %s" % (SITE, SITE_TAG)
-    def nav(href, text, key):
-        return '<a href="%s"%s>%s</a>' % (href, ' aria-current="page"' if active == key else "", text)
-    src = ' · <a href="%s" rel="noopener">Source code (MIT)</a>' % e(SOURCE_URL) if SOURCE_URL else ""
+def layout(title, body, q="", canonical="", noindex=False, active="", scripts=()):
+    full = "%s - %s" % (title, SITE) if title else "%s %s" % (SITE, SITE_TAG)
+
+    def tab(href, text, key):
+        return '<a href="%s"%s>%s</a>' % (href, ' class="on" aria-current="page"' if active == key else "", text)
+    src = ' | <a href="%s" rel="noopener">Source code (MIT)</a>' % e(SOURCE_URL) if SOURCE_URL else ""
+    extra = "".join('<script src="/static/%s?v=%s" defer></script>\n' % (s, ASSET_V) for s in scripts)
     return """<!doctype html>
 <html lang="en">
 <head>
@@ -414,94 +483,126 @@ def layout(title, body, q="", canonical="", noindex=False, active=""):
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>%s</title>
 %s%s<meta name="color-scheme" content="light dark">
+<script src="/static/theme.js?v=%s"></script>
 <link rel="stylesheet" href="/static/style.css?v=%s">
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <script src="/static/app.js?v=%s" defer></script>
-</head>
+%s</head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-<header class="site">
-<div class="wrap bar">
-<a class="brand" href="/"><b>%s</b> <span>%s</span></a>
-<nav class="mainnav" aria-label="Main">%s%s%s</nav>
+<div class="page">
+<header class="hd">
+<a class="brand" href="/">%s <span>%s</span></a>
 <form class="q" action="/search/posts" method="get" role="search">
 <label class="sr" for="q">Search posts</label>
 <input id="q" name="search" type="search" placeholder="Search posts" value="%s" autocomplete="off">
-<button type="submit" aria-label="Search">%s</button>
+<button type="submit">Search</button>
 </form>
-</div>
 </header>
-<main id="main" class="wrap">
+<nav class="tabs" aria-label="Main">%s%s%s%s%s%s<button id="theme" type="button" hidden>Dark theme</button></nav>
+<main id="main">
 %s
 </main>
-<footer class="site"><div class="wrap">
-<p>%s %s is an unofficial, read-only archive. Posts belong to their authors. Nothing you do here is sent to bitcointalk.org, and there are no accounts, trackers or ads.</p>
-<p><a href="/">Boards</a> · <a href="/search/posts">Search</a> · <a href="/search/users">Members</a> · <a href="https://talksearch.io" rel="noopener">TalkSearch</a> · <a href="https://bitcointalk.org" rel="noopener">bitcointalk.org</a>%s</p>
-</div></footer>
+<footer class="ft">
+<p>%s %s is an unofficial, read-only archive of public Bitcointalk posts and is not affiliated with bitcointalk.org. Posts belong to their authors. No accounts, trackers or ads; replies, merit and other actions open on bitcointalk.org itself.</p>
+<p>Data: public posts and profiles from <a href="https://bitcointalk.org" rel="noopener">bitcointalk.org</a>; trust lists and merit totals from <a href="https://loyce.club" rel="noopener">LoyceV</a>; edit history links to the <a href="https://bitlist.co" rel="noopener">BitList Archive</a>; search by <a href="https://talksearch.io" rel="noopener">TalkSearch</a>.</p>
+<p><a href="/">Home</a> | <a href="/search/posts">Search</a> | <a href="/search/users">Members</a>%s</p>
+</footer>
+</div>
 </body>
 </html>
 """ % (e(full),
        '<link rel="canonical" href="%s">\n' % e(canonical) if canonical else "",
        '<meta name="robots" content="noindex">\n' if noindex else "",
-       ASSET_V, ASSET_V, e(SITE), e(SITE_TAG),
-       nav("/", "Boards", "boards"), nav("/search/posts", "Search", "search"), nav("/search/users", "Members", "members"),
-       e(q), ICON_SEARCH, body, e(SITE), e(SITE_TAG), src)
+       ASSET_V, ASSET_V, ASSET_V, extra, e(SITE), e(SITE_TAG), e(q),
+       tab("/", "Home", "boards"), tab("/search/posts", "Search", "search"), tab("/search/users", "Members", "members"),
+       tab("/recent", "Recent posts", "recent"),
+       act(bct("action=login"), "Login"), act(bct("action=register"), "Register"),
+       body, e(SITE), e(SITE_TAG), src)
 
 
 def message_page(title, text, extra=""):
-    return layout(title, '<section class="panel msg"><h1>%s</h1><p>%s</p>%s<p><a class="btn" href="/">Back to the boards</a></p></section>'
+    return layout(title, '<div class="tb"><h1 class="catbg">%s</h1><div class="pad"><p>%s</p>%s<p><a href="/">Back to the board index</a></p></div></div>'
                   % (e(title), text, extra), noindex=True)
 
 
-# --------------------------------------------------------------------------- pages
-def last_post_cell(b):
-    if not b.get("last_thread_id"):
-        return '<span class="muted">No posts yet</span>'
-    return ('<a class="lp-title" href="/threads/%s?last=1">%s</a><span class="lp-meta">by %s · %s</span>'
-            % (b["last_thread_id"], e(clean_title(b.get("last_thread_title"))),
-               user_link(b.get("last_post_username")), when(b.get("last_post_created_at"), short=True)))
+# --------------------------------------------------------------------------- board index and boards
+def board_row(n, boards):
+    last = '<span class="muted">No posts</span>'
+    if n.get("last_thread_id"):
+        last = ('<b>Last post</b> by %s<br>in <a href="/threads/%s?last=1">%s</a><br>on %s'
+                % (user_link(n.get("last_post_username")), n["last_thread_id"],
+                   e(clean_title(n.get("last_thread_title"))), when(n.get("last_post_created_at"))))
+    kids = ""
+    if n["kids"]:
+        kids = '<div class="kids"><b>Child Boards</b>: %s</div>' % ", ".join(
+            '<a href="/boards/%s">%s</a>' % (k, e(boards[k]["name"])) for k in n["kids"])
+    desc = DESCRIPTIONS.get(str(n["id"]), "")
+    new = is_recent(n.get("last_post_created_at"))
+    return ('<tr><td class="ic">%s</td><td class="info"><a class="bn" href="/boards/%s">%s</a>%s%s'
+            '<div class="m-stats">%s Posts, %s Topics</div>%s</td>'
+            '<td class="stats">%s Posts<br>%s Topics</td><td class="last">%s</td></tr>'
+            % (ICON_BOARD % ("new" if new else "", "New posts in the last day" if new else "No new posts in the last day"),
+               n["id"], e(n["name"]), '<div class="desc">%s</div>' % e(desc) if desc else "", kids,
+               num(n.get("post_count")), num(n.get("thread_count")),
+               '<div class="m-last">Last post by %s, %s</div>' % (user_link(n.get("last_post_username")), when(n.get("last_post_created_at")))
+               if n.get("last_thread_id") else "",
+               num(n.get("post_count")), num(n.get("thread_count")), last))
 
 
 def page_home(q):
-    data = board_index()
-    out = ['<h1 class="sr">Boards</h1>']
-    for cat in data.get("boards", []):
-        rows = []
-        for b in cat.get("boards", []):
-            kids = ""
-            if b.get("children"):
-                kids = '<p class="kids"><span>Child boards:</span> %s</p>' % ", ".join(
-                    '<a href="/boards/%s">%s</a>' % (c["id"], e(c["name"])) for c in b["children"])
-            rows.append(
-                '<tr><th scope="row" class="b-name"><a href="/boards/%s">%s</a>%s</th>'
-                '<td class="n" data-l="Topics">%s</td><td class="n" data-l="Posts">%s</td>'
-                '<td class="lp">%s</td></tr>'
-                % (b["id"], e(b["name"]), kids, num(b.get("thread_count")), num(b.get("post_count")), last_post_cell(b)))
-        out.append(
-            '<section class="panel cat"><h2>%s</h2><table class="list boards"><thead><tr>'
-            '<th scope="col">Board</th><th scope="col" class="n">Topics</th><th scope="col" class="n">Posts</th>'
-            '<th scope="col">Last post</th></tr></thead><tbody>%s</tbody></table></section>'
-            % (e(cat.get("name") or ""), "".join(rows)))
-    recent = data.get("threads") or []
-    if recent:
-        items = "".join(
-            '<li><a href="/threads/%s?last=1">%s</a><span class="lp-meta">%s · by %s · %s</span></li>'
-            % (t["id"], e(clean_title(t.get("title"))),
-               '<a href="/boards/%s">%s</a>' % (t["board"]["id"], e(t["board"]["name"])) if t.get("board") else "",
-               user_link((t.get("user") or {}).get("username")), when((t.get("post") or {}).get("created_at")))
-            for t in recent)
-        out.append('<section class="panel cat"><h2>Latest posts</h2><ul class="recent">%s</ul></section>' % items)
+    f = forum()
+    boards = f["boards"]
+    out = ['<h1 class="sr">Board index</h1>']
+    for name, ids in f["cats"]:
+        out.append('<section class="tb" id="c-%s"><h2 class="catbg">%s</h2><table class="grid boards"><tbody>%s</tbody></table></section>'
+                   % (re.sub(r"[^a-z0-9]+", "-", name.lower()), e(name), "".join(board_row(boards[i], boards) for i in ids)))
+    total_posts = sum(int(b.get("post_count") or 0) for b in boards.values())
+    total_topics = sum(int(b.get("thread_count") or 0) for b in boards.values())
+    recent = "".join(
+        "<li>%s by %s in %s <span class=\"muted\">%s</span></li>"
+        % ('<a href="/threads/%s?last=1">%s</a>' % (t["id"], e(clean_title(t.get("title")))),
+           user_link((t.get("user") or {}).get("username")),
+           '<a href="/boards/%s">%s</a>' % (t["board"]["id"], e(t["board"]["name"])) if t.get("board") else "",
+           when((t.get("post") or {}).get("created_at")))
+        for t in f["recent"])
+    out.append('<section class="tb"><h2 class="catbg">Info Center</h2><table class="grid"><tbody>'
+               '<tr><td class="titlebg" colspan="2">Recent Posts</td></tr><tr><td class="ic">%s</td><td class="w2"><ul class="plain">%s</ul>'
+               '<p class="small"><a href="/recent">View the most recent posts</a></p></td></tr>'
+               '<tr><td class="titlebg" colspan="2">Archive Stats</td></tr><tr><td class="ic">%s</td><td class="w2 small">'
+               '%s Posts in %s Topics across %s boards</td></tr></tbody></table></section>'
+               % (ICON_POST, recent, ICON_POST, num(total_posts), num(total_topics), num(len(boards))))
     return layout("", "".join(out), active="boards", canonical="/")
 
 
+def page_recent(q):
+    f = forum()
+    rows = "".join(
+        '<tr><td class="info"><a class="tn" href="/threads/%s?last=1">%s</a></td><td class="w1">%s</td>'
+        '<td class="w2">%s</td><td class="w1 small">%s</td></tr>'
+        % (t["id"], e(clean_title(t.get("title"))),
+           '<a href="/boards/%s">%s</a>' % (t["board"]["id"], e(t["board"]["name"])) if t.get("board") else "",
+           user_link((t.get("user") or {}).get("username")), when((t.get("post") or {}).get("created_at")))
+        for t in f["recent"])
+    body = ('%s<div class="tb"><h1 class="catbg">Recent Posts</h1><table class="grid topics"><thead><tr class="titlebg">'
+            '<th scope="col">Topic</th><th scope="col">Board</th><th scope="col">Last post by</th><th scope="col">Date</th>'
+            '</tr></thead><tbody>%s</tbody></table></div><p class="small muted">Each board\'s topic list is sorted by latest reply as well.</p>'
+            % (crumbs_html([("Recent Posts", "/recent")]), rows))
+    return layout("Recent Posts", body, active="recent", canonical="/recent")
+
+
 def page_board(bid, q):
+    f = forum()
+    boards = f["boards"]
+    node = boards.get(bid)
     page = max(1, int(q.get("page", ["1"])[0] or 1))
     if (page - 1) * PER_PAGE >= MAX_WINDOW:
         page = MAX_WINDOW // PER_PAGE
     data = api("/api/threads", {"board_id": bid, "limit": PER_PAGE, "page": page}, ttl=20)
     board = data["board"]
-    if not board.get("description") and not data.get("normal"):
+    if not node and not data.get("normal"):
         raise NotFound()
+    name = (node or board).get("name") or "Board"
     total = int(board.get("thread_count") or 0)
     pages = max(1, min(math.ceil(total / PER_PAGE), MAX_WINDOW // PER_PAGE))
     base = "/boards/%s" % bid
@@ -514,40 +615,44 @@ def page_board(bid, q):
             nums = [1, 2, 3] if tp <= 4 else [1, 2]
             links = ['<a href="/threads/%s%s">%d</a>' % (t["id"], "" if p == 1 else "?page=%d" % p, p) for p in nums if p <= tp]
             if tp > 4:
-                links.append("…")
-            if tp > 3:
+                links.append("...")
+            if tp >= 4:
                 links.append('<a href="/threads/%s?page=%d">%s</a>' % (t["id"], tp, num(tp)))
-            elif tp == 4:
-                links.append('<a href="/threads/%s?page=4">4</a>' % t["id"])
-            mini = '<span class="mini" aria-label="Pages">%s</span>' % " ".join(links)
+            mini = ' <span class="mini">« %s »</span>' % " ".join(links)
+        hot = "hot" if pc > 100 else ("new" if is_recent(t.get("last_post_created_at")) else "")
+        starter = user_link(t.get("started_by")) if t.get("started_by") else '<span class="muted">-</span>'
         rows.append(
-            '<tr><th scope="row" class="t-name"><a href="/threads/%s">%s</a>%s</th>'
-            '<td class="n" data-l="Replies">%s</td><td class="n" data-l="Views">%s</td>'
-            '<td class="lp"><a href="/threads/%s?last=1">%s</a><span class="lp-meta">by %s</span></td></tr>'
-            % (t["id"], e(clean_title(t.get("title"))), mini, num(max(0, pc - 1)), num(t.get("view_count")),
+            '<tr><td class="ic">%s</td><td class="info"><a class="tn" href="/threads/%s">%s</a>%s'
+            '<div class="m-stats">Started by %s · %s replies · %s views</div>'
+            '<div class="m-last">Last post by %s, <a href="/threads/%s?last=1">%s</a></div></td>'
+            '<td class="w2 starter">%s</td><td class="w1 n">%s</td><td class="w1 n">%s</td>'
+            '<td class="last"><a href="/threads/%s?last=1">%s</a><br>by %s</td></tr>'
+            % (ICON_TOPIC % hot, t["id"], e(clean_title(t.get("title"))), mini, starter, num(max(0, pc - 1)),
+               num(t.get("view_count")), user_link(t.get("last_post_username")), t["id"], when(t.get("last_post_created_at")),
+               starter, num(max(0, pc - 1)), num(t.get("view_count")),
                t["id"], when(t.get("last_post_created_at")), user_link(t.get("last_post_username"))))
     kids = ""
-    if board.get("children"):
-        kids = '<section class="panel cat"><h2>Child boards</h2><table class="list boards"><tbody>%s</tbody></table></section>' % "".join(
-            '<tr><th scope="row" class="b-name"><a href="/boards/%s">%s</a></th><td class="n" data-l="Topics">%s</td>'
-            '<td class="n" data-l="Posts">%s</td><td class="lp">%s</td></tr>'
-            % (c["id"], e(c["name"]), num(c.get("thread_count")), num(c.get("post_count")), last_post_cell(c))
-            for c in board["children"])
+    if node and node["kids"]:
+        kids = ('<section class="tb"><h2 class="catbg">Child Boards</h2><table class="grid boards"><tbody>%s</tbody></table></section>'
+                % "".join(board_row(boards[k], boards) for k in node["kids"]))
     pg = pager(base, page, pages, "Topic list pages")
+    buttons = ('<span class="btns"><a class="btn" href="/compose?board=%s">New topic</a>%s</span>'
+               % (bid, act(bct("action=notifyboard;board=%s.0" % bid), "Notify", "Get notified about new topics", "btn")))
     capped = ""
     if math.ceil(total / PER_PAGE) > pages and page == pages:
-        capped = '<p class="muted small">Older topics in this board are reachable through search.</p>'
-    body = "%s<div class=\"head\"><h1>%s</h1><p class=\"sub\">%s topics · %s posts</p>%s</div>%s%s" \
-           "<section class=\"panel\"><table class=\"list topics\"><thead><tr><th scope=\"col\">Subject</th>" \
-           "<th scope=\"col\" class=\"n\">Replies</th><th scope=\"col\" class=\"n\">Views</th><th scope=\"col\">Last post</th>" \
-           "</tr></thead><tbody>%s</tbody></table></section>%s%s" % (
-               crumbs_html(board_crumbs(board)), e(board.get("name") or "Board"), num(total), num(board.get("post_count")),
-               ext("%s?action=post;board=%s.0" % (BCT, bid), "New topic", "btn ghost"),
-               kids, pg, "".join(rows) or '<tr><td colspan="4" class="muted">No topics.</td></tr>', pg, capped)
-    return layout(board.get("name") or "Board", body, active="boards",
-                  canonical=base if page == 1 else "%s?page=%d" % (base, page))
+        capped = '<p class="small muted">Older topics in this board are reachable through search.</p>'
+    desc = DESCRIPTIONS.get(str(bid), "")
+    body = ('%s%s<div class="bar">%s%s</div><div class="tb"><h1 class="catbg">%s%s</h1><table class="grid topics"><thead><tr class="titlebg">'
+            '<th scope="col" class="ic"><span class="sr">Status</span></th><th scope="col">Subject</th><th scope="col" class="starter">Started by</th>'
+            '<th scope="col" class="n">Replies</th><th scope="col" class="n">Views</th><th scope="col">Last post</th></tr></thead>'
+            '<tbody>%s</tbody></table></div><div class="bar">%s%s</div>%s'
+            % (crumbs_html(board_trail(bid) or [(name, base)]), kids, pg, buttons, e(name),
+               ' <span class="sub">%s</span>' % e(desc) if desc else "",
+               "".join(rows) or '<tr><td colspan="6" class="muted">No topics.</td></tr>', pg, buttons, capped))
+    return layout(name, body, active="boards", canonical=base if page == 1 else "%s?page=%d" % (base, page))
 
 
+# --------------------------------------------------------------------------- topics
 def poll_html(poll):
     if not poll or not poll.get("answers"):
         return ""
@@ -557,17 +662,17 @@ def poll_html(poll):
         v = int(a.get("votes") or 0)
         if poll.get("display_mode") == "always" and total:
             pct = 100.0 * v / total
-            rows.append('<li><span class="pl">%s</span><span class="pb"><span style="width:%.1f%%"></span></span>'
-                        '<span class="pv">%s (%.1f%%)</span></li>' % (e(a.get("answer") or ""), pct, num(v), pct))
+            rows.append('<tr><td>%s</td><td class="pb"><span style="width:%.1f%%"></span></td><td class="n">%s (%.1f%%)</td></tr>'
+                        % (e(a.get("answer") or ""), pct, num(v), pct))
         else:
-            rows.append('<li><span class="pl">%s</span></li>' % e(a.get("answer") or ""))
-    foot = "Total votes: %s." % num(total) if total else "Results are hidden on bitcointalk.org until you vote there."
-    return ('<section class="panel poll" aria-label="Poll"><h2>Poll: %s</h2><ul>%s</ul><p class="muted small">%s '
-            'Voting happens on bitcointalk.org.</p></section>' % (e(poll.get("question") or ""), "".join(rows), foot))
+            rows.append('<tr><td colspan="3">%s</td></tr>' % e(a.get("answer") or ""))
+    foot = "Total Voters: %s" % num(total) if total else "Results are shown on bitcointalk.org after you vote there."
+    return ('<section class="tb poll"><h2 class="catbg">Poll</h2><div class="pad"><p><b>Question:</b> %s</p>'
+            '<table class="pollt"><tbody>%s</tbody></table><p class="small muted">%s</p></div></section>'
+            % (e(poll.get("question") or ""), "".join(rows), foot))
 
 
 def page_thread(tid, q):
-    params = {"thread_id": tid, "limit": PER_PAGE}
     if q.get("post", [""])[0].isdigit():
         pid = int(q["post"][0])
         try:
@@ -583,12 +688,8 @@ def page_thread(tid, q):
         page = max(1, math.ceil(cnt / PER_PAGE))
         return ("redirect", "/threads/%d%s#last" % (tid, "" if page == 1 else "?page=%d" % page))
     start = q.get("start", [""])[0]
-    if start.isdigit():
-        page = int(start) // PER_PAGE + 1
-    else:
-        page = max(1, int(q.get("page", ["1"])[0] or 1))
-    params["page"] = page
-    data = api("/api/posts", params, ttl=15)
+    page = int(start) // PER_PAGE + 1 if start.isdigit() else max(1, int(q.get("page", ["1"])[0] or 1))
+    data = api("/api/posts", {"thread_id": tid, "limit": PER_PAGE, "page": page}, ttl=15)
     posts = data.get("posts") or []
     thread = data["thread"]
     count = int(thread.get("post_count") or 0)
@@ -599,117 +700,279 @@ def page_thread(tid, q):
         raise NotFound()
     title = clean_title(thread.get("title"))
     base = "/threads/%d" % tid
+    here = base if page == 1 else "%s?page=%d" % (base, page)
     bid = thread.get("board_id")
-    crumbs = []
-    if bid is not None:
-        try:
-            crumbs = board_crumbs(api("/api/boards/%s" % bid, ttl=600))
-        except (NotFound, Upstream):
-            crumbs = [(thread.get("board_name") or "Board", "/boards/%s" % bid)]
+    crumbs = (board_trail(bid) if bid is not None else []) or [(thread.get("board_name") or "Board", "/boards/%s" % bid)]
     crumbs.append((title, base))
     on_page = {str(p["id"]) for p in posts}
-    arts = []
+    rows = []
     for i, p in enumerate(posts):
         u = p.get("user") or {}
         name = u.get("username") or "(unknown)"
-        rank = u.get("rank") or ""
-        stats = []
+        uid = u.get("id") or ""
+        pid = p["id"]
+        info = []
+        if u.get("rank"):
+            info.append('<div class="rank">%s</div>' % e(u["rank"]))
         if isinstance(u.get("activity"), int) and u["activity"] >= 0:
-            stats.append("<li>Activity: <b>%s</b></li>" % num(u["activity"]))
-        if u.get("merit"):
-            stats.append("<li>Merit: <b>%s</b></li>" % num(u["merit"]))
+            info.append("<div>Activity: %s</div>" % num(u["activity"]))
+        info.append("<div>Merit: %s</div>" % num(u.get("merit") or 0))
+        av = avatar_html(p.get("avatar") or u.get("avatar"), name, 64)
         tr = trust_html(u.get("stats"))
-        if tr:
-            stats.append("<li>%s</li>" % tr)
-        sig = ""
-        if u.get("signature"):
-            sig = '<div class="sig" aria-label="Signature">%s</div>' % balanced(u["signature"], tight=True)
-        last = ' <span id="last"></span>' if i == len(posts) - 1 else ""
-        arts.append(
-            '<article class="entry" id="%s" aria-label="Post %s by %s">%s'
-            '<aside class="author">%s<div class="who">%s%s<ul class="stats">%s</ul></div></aside>'
-            '<div class="pbody"><header><span class="pdate">%s</span><span class="ptools">'
-            '<a href="%s?action=post;quote=%s;topic=%d" rel="noopener nofollow" title="Quote this post">Quote</a>'
-            '<a href="%s?topic=%d.msg%s#msg%s" rel="noopener nofollow" title="Open the original post">Original</a>'
-            '<a class="pnum" href="%s#%s" title="Link to this post">#%s</a></span></header>'
-            '<div class="content">%s</div>%s</div></article>'
-            % (p["id"], num(p.get("position")), e(name), last,
-               avatar_html(p.get("avatar") or u.get("avatar"), name, 72),
-               user_link(name, "name"), '<span class="rank">%s</span>' % e(rank) if rank else "", "".join(stats),
-               when(p.get("created_at")), BCT, p["id"], tid, BCT, tid, p["id"], p["id"],
-               base if page == 1 else "%s?page=%d" % (base, page), p["id"], num(p.get("position")),
-               post_body(p.get("body_html"), tid, on_page), sig))
+        ulinks = ""
+        if uid:
+            ulinks = '<div class="ulinks">%s %s %s</div>' % (
+                act(bct("action=pm;sa=send;u=%s" % uid), "PM", "Send this member a personal message"),
+                act(bct("action=trust;u=%s" % uid), "Trust", "View or leave trust feedback"),
+                act(bct("topic=%d.msg%s#msg%s" % (tid, pid, pid)), "Ignore", "Opens the post on bitcointalk.org, where Ignore sits under the author"))
+        merit = ""
+        if p.get("merit"):
+            merit = '<div class="merited">Merited: <b>+%s</b> by %s member%s</div>' % (
+                num(p["merit"].get("total")), num(p["merit"].get("senders")), "" if p["merit"].get("senders") == 1 else "s")
+        sig = '<div class="sig" aria-label="Signature">%s</div>' % balanced(u["signature"], tight=True) if u.get("signature") else ""
+        acts = "".join([
+            '<a href="/compose?topic=%d&amp;quote=%s">Quote</a>' % (tid, pid),
+            act(bct("action=merit;msg=%s" % pid), "Send merit"),
+            act(bct("action=reporttm;topic=%d.0;msg=%s" % (tid, pid)), "Report", "Report this post to the moderators"),
+            act("https://bitlist.co/post/%s" % pid, "Edit history", "Earlier versions of this post, kept by the BitList Archive"),
+            act(bct("topic=%d.msg%s#msg%s" % (tid, pid, pid)), "Original", "This post on bitcointalk.org")])
+        rows.append(
+            '<tr class="post %s" id="%s"><td class="poster">%s<b class="pname">%s</b>%s%s%s%s</td>'
+            '<td class="msg"><div class="phead">%s<div class="pt"><a class="subject" href="%s#%s">%s%s</a>'
+            '<div class="small">%s</div>%s</div><a class="pnum" href="%s#%s" title="Link to this post">#%s</a></div>'
+            '<div class="content">%s</div>%s<div class="acts">%s</div></td></tr>'
+            % ("alt" if i % 2 else "", pid, '<span id="last"></span>' if i == len(posts) - 1 else "",
+               user_link(name), "".join(info), av, '<div>%s</div>' % tr if tr else "", ulinks,
+               ICON_POST, here, pid, "" if p.get("position") == 1 else "Re: ", e(title), when(p.get("created_at")), merit,
+               here, pid, num(p.get("position")), post_body(p.get("body_html"), tid, on_page), sig, acts))
     pg = pager(base, page, pages, "Topic pages")
-    reply = ext("%s?action=post;topic=%d.0" % (BCT, tid), "Reply", "btn")
-    body = ('%s<div class="head"><h1>%s</h1><p class="sub">%s posts · page %s of %s</p>%s</div>%s'
-            '<div class="tools">%s</div><div class="posts">%s</div><div class="tools">%s%s</div>'
-            % (crumbs_html(crumbs), e(title), num(count), num(page), num(pages), reply,
-               poll_html(thread.get("poll")) if page == 1 else "", pg, "".join(arts), pg, reply))
-    return layout(title, body, active="boards", canonical=base if page == 1 else "%s?page=%d" % (base, page))
+    buttons = '<span class="btns"><a class="btn" href="/compose?topic=%d">Reply</a>%s%s</span>' % (
+        tid, act(bct("action=notify;topic=%d.0" % tid), "Notify", "Get notified about replies", "btn"),
+        act(bct("action=printpage;topic=%d.0" % tid), "Print", "", "btn"))
+    body = ('%s%s<div class="bar">%s%s</div><div class="tb"><table class="grid posts"><thead><tr class="catbg">'
+            '<th scope="col" class="poster">Author</th><th scope="col">Topic: <h1>%s</h1> <span class="sub">(%s posts)</span></th></tr></thead>'
+            '<tbody>%s</tbody></table></div><div class="bar">%s%s</div>'
+            % (crumbs_html(crumbs), poll_html(thread.get("poll")) if page == 1 else "", pg, buttons, e(title), num(count),
+               "".join(rows), pg, buttons))
+    return layout(title, body, active="boards", canonical=here)
 
 
-def post_cards(posts, titles=None, show_author=True):
+# --------------------------------------------------------------------------- composer
+def page_compose(q):
+    """Write a reply, quote or new topic here; it is then pasted into the real form on
+    bitcointalk.org. Nothing typed on this page is sent to this server."""
+    tid = q.get("topic", [""])[0]
+    bid = q.get("board", [""])[0]
+    quote = q.get("quote", [""])[0]
+    prefill, heading, crumbs = "", "", []
+    if tid.isdigit():
+        first = api("/api/posts", {"thread_id": tid, "limit": 1, "start": 0}, ttl=60)
+        if not first.get("posts"):
+            raise NotFound()
+        title = clean_title(first["thread"].get("title"))
+        target = bct("action=post;topic=%s.0" % tid)
+        key, heading = "reply-%s" % tid, "Reply to: %s" % title
+        crumbs = (board_trail(first["thread"].get("board_id")) or []) + [(title, "/threads/%s" % tid), ("Reply", None)]
+        if quote.isdigit():
+            p = api("/api/posts/%s" % quote, ttl=300)
+            d = parse_dt(p.get("created_at"))
+            prefill = bbcode.quote_block((p.get("user") or {}).get("username") or "", p.get("thread_id") or tid, p["id"],
+                                         int(d.timestamp()) if d else 0, p.get("body_html"))
+        subject = ""
+    elif bid.isdigit():
+        node = forum()["boards"].get(int(bid))
+        if not node:
+            raise NotFound()
+        target = bct("action=post;board=%s.0" % bid)
+        key, heading = "topic-%s" % bid, "New topic in: %s" % node["name"]
+        crumbs = board_trail(int(bid)) + [("New topic", None)]
+        subject = ('<p><label for="subject"><b>Subject</b></label><br><span class="row"><input id="subject" type="text" maxlength="80">'
+                   '<button type="button" class="btn" data-copy="subject">Copy subject</button></span></p>')
+    else:
+        raise NotFound()
+    tools = "".join('<button type="button" data-tag="%s" title="%s"%s>%s</button>' % (t, e(tip), ' class="%s"' % c if c else "", lab)
+                    for t, lab, tip, c in (
+        ("b", "B", "Bold", "tb-b"), ("i", "I", "Italic", "tb-i"), ("u", "U", "Underline", "tb-u"), ("s", "S", "Strikethrough", "tb-s"),
+        ("quote", "Quote", "Quote", ""), ("code", "Code", "Code", ""), ("url", "URL", "Link", ""), ("img", "Img", "Image", ""),
+        ("size", "Size", "Text size", ""), ("color", "Color", "Text colour", ""), ("list", "List", "List", ""),
+        ("center", "Center", "Centre", ""), ("tt", "TT", "Teletype", ""), ("hr", "HR", "Horizontal rule", "")))
+    body = ('%s<div class="tb"><h1 class="catbg">%s</h1><div class="pad composer" id="composer" data-key="%s" data-target="%s">'
+            '<noscript><p class="warn">The composer needs JavaScript. You can also %s.</p></noscript>'
+            '%s<div class="toolbar" role="toolbar" aria-label="Formatting">%s</div>'
+            '<label class="sr" for="msg">Message (BBCode)</label><textarea id="msg" rows="12" spellcheck="true"></textarea>'
+            '<textarea id="prefill" hidden>%s</textarea>'
+            '<p class="row"><button type="button" class="btn primary" id="go">Copy and open Bitcointalk</button>'
+            '<button type="button" class="btn" data-copy="msg">Copy only</button>'
+            '<button type="button" class="btn" id="clear">Clear draft</button><span id="status" role="status" class="small"></span></p>'
+            '<p class="small muted">Your draft is kept only in this browser. Nothing you type here is sent to this site, and this site never asks for '
+            'your Bitcointalk login. Pressing the first button copies the message and opens the real form on bitcointalk.org in a new window: '
+            '<b>paste your message there and press Post.</b></p>'
+            '<h2 class="titlebg">Preview</h2><div id="preview" class="content preview" aria-live="polite"></div></div></div>'
+            % (crumbs_html(crumbs), e(heading), e(key), e(target), act(target, "write directly on bitcointalk.org"),
+               subject, tools, e(prefill)))
+    return layout(heading, body, noindex=True, active="boards", scripts=("composer.js",))
+
+
+# --------------------------------------------------------------------------- members
+def post_list(posts, titles=None, show_author=True):
     out = []
     for p in posts:
-        tid = p.get("thread_id")
-        title = p.get("thread_title") or (titles or {}).get(str(tid)) or "Topic %s" % tid
-        board = ""
-        if p.get("board_name"):
-            board = ' · <a href="/boards/%s">%s</a>' % (p.get("board_id"), e(p["board_name"]))
-        author = " · by %s" % user_link((p.get("user") or {}).get("username")) if show_author else ""
-        out.append('<li><a class="r-title" href="/threads/%s?post=%s#%s">%s</a><p class="lp-meta">%s%s%s</p><p class="r-text">%s</p></li>'
-                   % (tid, p["id"], p["id"], e(clean_title(title)), when(p.get("created_at")), author, board,
-                      excerpt(p.get("body_html"))))
-    return '<ul class="results">%s</ul>' % "".join(out)
+        tid = p.get("thread_id") or p.get("topic_id")
+        pid = p.get("id") or p.get("post_id")
+        title = p.get("thread_title") or p.get("topic_title") or (titles or {}).get(str(tid)) or "Topic %s" % tid
+        board = ' in <a href="/boards/%s">%s</a>' % (p.get("board_id"), e(p["board_name"])) if p.get("board_name") else ""
+        who = (p.get("user") or {}).get("username") or p.get("author")
+        author = " by %s" % user_link(who) if show_author else ""
+        merit = ' · <span class="merited">Merit +%s</span>' % num(p["post_merit_total"]) if p.get("post_merit_total") else ""
+        out.append('<tr><td class="info"><a class="tn" href="/threads/%s?post=%s#%s">%s</a><div class="small">%s%s%s%s</div>'
+                   '<div class="excerpt">%s</div></td></tr>'
+                   % (tid, pid, pid, e(clean_title(title)), when(p.get("created_at") or p.get("date")), author, board, merit,
+                      excerpt(p.get("body_html") or p.get("content"))))
+    return '<table class="grid results"><tbody>%s</tbody></table>' % "".join(out)
+
+
+def optional(path, ttl):
+    """Data the API may not offer yet (older API): None instead of an error."""
+    try:
+        return api(path, ttl=ttl)
+    except (NotFound, Upstream):
+        return None
 
 
 def page_profile(name, q, sub=""):
-    u = api("/api/users/%s" % urllib.parse.quote(name, safe=""), ttl=60)
+    quoted = urllib.parse.quote(name, safe="")
+    u = api("/api/users/%s" % quoted, ttl=60)
     uname = u.get("username") or name
+    uid = u.get("id")
     page = max(1, int(q.get("page", ["1"])[0] or 1))
     if (page - 1) * PER_PAGE >= MAX_WINDOW:
         page = MAX_WINDOW // PER_PAGE
-    pd = api("/api/posts/user/%s" % urllib.parse.quote(name, safe=""), {"limit": PER_PAGE, "page": page}, ttl=30)
+    pd = api("/api/posts/user/%s" % quoted, {"limit": PER_PAGE, "page": page}, ttl=30)
+    lists = optional("/api/trust/%s/lists" % quoted, 600) if page == 1 else None
+    stats = optional("/api/users/%s/stats" % quoted, 600) if page == 1 else None
     count = int(pd.get("count") or 0)
     pages = max(1, min(math.ceil(count / PER_PAGE), MAX_WINDOW // PER_PAGE))
     base = "/profile/%s" % urllib.parse.quote(uname, safe="")
-    facts = []
+    facts = [("Name", e(uname))]
     if u.get("rank"):
-        facts.append(("Rank", e(u["rank"])))
+        facts.append(("Position", e(u["rank"])))
+    facts.append(("Posts in archive", num(u.get("post_count"))))
     if isinstance(u.get("activity"), int) and u["activity"] >= 0:
         facts.append(("Activity", num(u["activity"])))
-    facts.append(("Merit", num(u.get("merit") or 0)))
-    facts.append(("Archived posts", num(u.get("post_count"))))
-    if u.get("created_at"):
+    facts.append(("Merit", "%s received%s" % (num(u.get("merit") or 0),
+                                              ", %s sent" % num(u["merit_sent"]) if u.get("merit_sent") is not None else "")))
+    if stats:
+        facts.append(("Topics posted in", num(stats.get("topics"))))
+        facts.append(("First archived post", when(stats.get("first"), short=True)))
+        facts.append(("Last archived post", when(stats.get("last"), short=True)))
+    elif u.get("created_at"):
         facts.append(("First archived post", when(u["created_at"], short=True)))
-    tr = trust_html(u.get("stats"))
-    if tr:
-        facts.append(("DefaultTrust", tr.replace("Trust: ", "")))
-    dl = "".join("<div><dt>%s</dt><dd>%s</dd></div>" % f for f in facts)
-    links = " ".join([
-        ext(u.get("profile_on_bitcointalk") or "%s?action=profile;u=%s" % (BCT, u.get("id")), "Original profile", "btn ghost"),
-        ext(u.get("merit_history_url") or "#", "Merit history", "btn ghost"),
-        ext("https://bpip.org/Profile?p=%s" % urllib.parse.quote(uname), "Trust feedback (BPIP)", "btn ghost")])
-    sig = '<div class="sig full" aria-label="Signature">%s</div>' % balanced(u["signature"], tight=True) if u.get("signature") else ""
+    tr = trust_html(u.get("stats"), "")
+    facts.append(("DefaultTrust", tr or '<span class="muted">not in the network</span>'))
+    dl = "".join('<tr><th scope="row">%s:</th><td>%s</td></tr>' % f for f in facts)
+    actions = " ".join([
+        act(bct("action=pm;sa=send;u=%s" % uid), "Send PM", "", "btn"),
+        act(bct("action=trust;u=%s" % uid), "Trust feedback", "View or leave feedback", "btn"),
+        act(bct("action=merit;u=%s" % uid), "Merit", "Merit sent and received", "btn"),
+        act(bct("action=profile;u=%s;sa=showPosts" % uid), "All posts", "", "btn"),
+        act(bct("action=profile;u=%s;sa=statPanel" % uid), "Forum stats", "", "btn"),
+        act(u.get("merit_history_url") or "https://loyce.club/Merit/history/%s.html" % uid, "Merit history", "LoyceV's merit history", "btn"),
+        act(u.get("profile_on_bitcointalk") or bct("action=profile;u=%s" % uid), "Original profile", "", "btn")])
+    extra = []
+    if lists and any(lists.values()):
+        def names(key):
+            return ", ".join(user_link(x["username"]) for x in lists[key]) or '<span class="muted">nobody</span>'
+        extra.append('<details class="tb"><summary class="titlebg">Trust lists (DefaultTrust network, LoyceV snapshot)</summary><table class="grid kv"><tbody>'
+                     '<tr><th scope="row">Included by (%d)</th><td>%s</td></tr><tr><th scope="row">Excluded by (%d)</th><td>%s</td></tr>'
+                     '<tr><th scope="row">Includes (%d)</th><td>%s</td></tr><tr><th scope="row">Excludes (%d)</th><td>%s</td></tr>'
+                     '</tbody></table><p class="pad small muted">Feedback comments are only visible to signed-in members on bitcointalk.org; use Trust feedback above.</p></details>'
+                     % (len(lists["trusted_by"]), names("trusted_by"), len(lists["distrusted_by"]), names("distrusted_by"),
+                        len(lists["trusts"]), names("trusts"), len(lists["distrusts"]), names("distrusts")))
+    if stats and stats.get("boards"):
+        top = max(b["posts"] for b in stats["boards"]) or 1
+        brow = "".join('<tr><td><a href="/boards/%s">%s</a></td><td class="pb"><span style="width:%.0f%%"></span></td><td class="n">%s</td></tr>'
+                       % (b["id"], e(b["name"]), 100.0 * b["posts"] / top, num(b["posts"])) for b in stats["boards"])
+        ytop = max(y["posts"] for y in stats["years"]) or 1
+        yrow = "".join('<tr><td>%s</td><td class="pb"><span style="width:%.0f%%"></span></td><td class="n">%s</td></tr>'
+                       % (y["year"], 100.0 * y["posts"] / ytop, num(y["posts"])) for y in stats["years"])
+        extra.append('<details class="tb"><summary class="titlebg">Posting statistics (from the archive)</summary><div class="two">'
+                     '<table class="pollt"><caption>Most active boards</caption><tbody>%s</tbody></table>'
+                     '<table class="pollt"><caption>Posts per year</caption><tbody>%s</tbody></table></div></details>' % (brow, yrow))
+    sig = ('<tr><th scope="row">Signature:</th><td><div class="sig full">%s</div></td></tr>' % balanced(u["signature"], tight=True)
+           if u.get("signature") else "")
     pg = pager(base, page, pages, "Post history pages")
-    body = ('%s<section class="panel profile"><div class="p-top">%s<div><h1>%s</h1><dl class="facts">%s</dl></div></div>'
-            '<p class="p-links">%s</p>%s</section><div class="head"><h2>Posts by %s</h2></div>%s<section class="panel">%s</section>%s'
-            % (crumbs_html([("Members", "/search/users"), (uname, base)]), avatar_html(u.get("avatar"), uname, 96), e(uname), dl,
-               links, sig, e(uname), pg,
-               post_cards(pd.get("posts") or [], show_author=False) if pd.get("posts") else '<p class="pad muted">No archived posts.</p>', pg))
+    body = ('%s<div class="tb"><h1 class="catbg">Summary - %s</h1><div class="summary"><table class="kv"><tbody>%s%s</tbody></table>'
+            '<div class="av">%s</div></div><div class="pad btns">%s</div></div>%s'
+            '<div class="bar">%s</div><div class="tb"><h2 class="catbg">Posts by %s</h2>%s</div><div class="bar">%s</div>'
+            % (crumbs_html([("Members", "/search/users"), (uname, base)]), e(uname), dl, sig, avatar_html(u.get("avatar"), uname, 96),
+               actions, "".join(extra), pg, e(uname),
+               post_list(pd.get("posts") or [], show_author=False) if pd.get("posts") else '<p class="pad muted">No archived posts.</p>', pg))
     return layout(uname, body, active="members", canonical=base if page == 1 else "%s?page=%d" % (base, page))
+
+
+# --------------------------------------------------------------------------- search
+def search_form(term, adv, q):
+    def val(k):
+        return e((q.get(k, [""])[0] or "")[:200])
+    simple = ('<form class="sform" action="/search/posts" method="get" role="search"><p><label for="bq"><b>Search for</b></label><br>'
+              '<span class="row"><input id="bq" name="search" type="search" value="%s" required><button class="btn primary" type="submit">Search</button></span></p>'
+              '<p class="small muted">Matches words in posts and topic titles. "quotes" for exact phrases, -word to exclude.</p></form>' % e(term))
+    if not TALKSEARCH_API:
+        return simple
+    boards = forum()["boards"]
+    opts = "".join('<option value="%s"%s>%s%s</option>' % (b["id"], " selected" if val("board_id") == str(b["id"]) else "",
+                                                           "- " * max(0, len(b["segs"]) - 2), e(b["name"])) for b in boards.values())
+    advanced = ('<details class="adv"%s><summary><b>Advanced search</b> (ranked by TalkSearch)</summary>'
+                '<form class="sform grid2" action="/search/posts" method="get"><input type="hidden" name="adv" value="1">'
+                '<label>All of these words<input name="search" type="search" value="%s"></label>'
+                '<label>This exact phrase<input name="exact_phrase" value="%s"></label>'
+                '<label>Any of these words<input name="any_words" value="%s"></label>'
+                '<label>None of these words<input name="without_words" value="%s"></label>'
+                '<label>By member<input name="author" value="%s" autocomplete="off"></label>'
+                '<label>In board<select name="board_id"><option value="">All boards</option>%s</select></label>'
+                '<label>From date<input name="date_from" type="date" value="%s"></label>'
+                '<label>To date<input name="date_to" type="date" value="%s"></label>'
+                '<p><button class="btn primary" type="submit">Search</button></p></form></details>'
+                % (" open" if adv else "", e(term), val("exact_phrase"), val("any_words"), val("without_words"), val("author"),
+                   opts, val("date_from"), val("date_to")))
+    return simple + advanced
 
 
 def page_search_posts(q):
     term = (q.get("search", q.get("q", [""]))[0] or "").strip()[:200]
+    adv = bool(q.get("adv")) and bool(TALKSEARCH_API)
     page = max(1, int(q.get("page", ["1"])[0] or 1))
-    form = ('<form class="bigq" action="/search/posts" method="get" role="search"><label for="bq">Search all archived posts</label>'
-            '<div><input id="bq" name="search" type="search" value="%s" required><button class="btn" type="submit">Search</button></div>'
-            '<p class="muted small">Matches words in posts and topic titles. Use "quotes" for exact phrases, -word to exclude. '
-            'For ranked and filtered search, use %s.</p></form>' % (e(term), ext("https://talksearch.io", "TalkSearch")))
-    if not term:
-        return layout("Search", '<div class="head"><h1>Search</h1></div><section class="panel pad">%s</section>' % form,
-                      active="search", canonical="/search/posts")
+    head = '%s<div class="tb"><h1 class="catbg">Search</h1><div class="pad">%s</div></div>' % (
+        crumbs_html([("Search", "/search/posts")]), search_form(term, adv, q))
+    filters = {k: (q.get(k, [""])[0] or "").strip()[:200] for k in ("exact_phrase", "any_words", "without_words", "author", "board_id", "date_from", "date_to")}
+    if not term and not (adv and any(filters.values())):
+        return layout("Search", head, active="search", canonical="/search/posts")
+    if adv:
+        params = {"q": term or filters["exact_phrase"] or filters["any_words"] or "*", "size": 50}
+        for k in ("exact_phrase", "any_words", "without_words", "date_from", "date_to"):
+            if filters[k]:
+                params[k] = filters[k]
+        if filters["board_id"].isdigit():
+            params["board_id"] = filters["board_id"]
+        note = ""
+        if filters["author"]:
+            try:
+                params["author_uid"] = api("/api/users/%s" % urllib.parse.quote(filters["author"], safe=""), ttl=600)["id"]
+            except NotFound:
+                note = '<p class="warn">No member is called “%s”; showing results from everyone.</p>' % e(filters["author"])
+        try:
+            with urllib.request.urlopen(TALKSEARCH_API + "/advanced-search?" + urllib.parse.urlencode(params), timeout=45) as r:
+                data = json.loads(r.read().decode("utf-8"))
+        except Exception:
+            raise Upstream("talksearch")
+        hits = data.get("hits") or []
+        for h in hits:
+            h["content"] = sanitize_light(h.get("content"))
+        res = post_list(hits) if hits else '<p class="pad muted">No posts match.</p>'
+        body = ('%s%s<div class="tb"><h2 class="catbg">Top %s of %s results, ranked by TalkSearch</h2>%s</div>'
+                '<p class="small muted">For more options and paging use %s.</p>'
+                % (head, note, num(len(hits)), num(data.get("total")), res, act("https://talksearch.io", "TalkSearch")))
+        return layout("Search: %s" % term, body, q=term, noindex=True, active="search")
     if (page - 1) * PER_PAGE >= MAX_WINDOW:
         page = MAX_WINDOW // PER_PAGE
     data = api("/api/search/posts", {"search": term, "limit": PER_PAGE, "page": page}, ttl=30)
@@ -725,35 +988,38 @@ def page_search_posts(q):
         except (NotFound, Upstream):
             return t, None
     titles = dict(_pool.map(title_of, tids))
-    base = "/search/posts?search=%s" % e(urllib.parse.quote_plus(term))
-    pg = pager(base, page, pages, "Search result pages")
-    res = post_cards(posts, titles) if posts else '<p class="pad muted">No posts match. Try fewer or different words.</p>'
-    body = ('<div class="head"><h1>Search</h1></div><section class="panel pad">%s</section>'
-            '<p class="sub count" role="status">%s result%s for <b>%s</b></p>%s<section class="panel">%s</section>%s'
-            % (form, num(count), "" if count == 1 else "s", e(term), pg, res, pg))
+    pg = pager("/search/posts?search=%s" % e(urllib.parse.quote_plus(term)), page, pages, "Search result pages")
+    res = post_list(posts, titles) if posts else '<p class="pad muted">No posts match. Try fewer or different words.</p>'
+    body = ('%s<div class="bar">%s</div><div class="tb"><h2 class="catbg">%s result%s for “%s”</h2>%s</div><div class="bar">%s</div>'
+            % (head, pg, num(count), "" if count == 1 else "s", e(term), res, pg))
     return layout("Search: %s" % term, body, q=term, noindex=True, active="search")
+
+
+def sanitize_light(content):
+    """TalkSearch hits are used for excerpts only, which strip all markup anyway."""
+    return content or ""
 
 
 def page_search_users(q):
     term = (q.get("search", q.get("username", [""]))[0] or "").strip()[:60]
     page = max(1, int(q.get("page", ["1"])[0] or 1))
-    form = ('<form class="bigq" action="/search/users" method="get" role="search"><label for="uq">Find a member by name</label>'
-            '<div><input id="uq" name="search" type="search" value="%s" minlength="2" required><button class="btn" type="submit">Find</button></div></form>' % e(term))
+    form = ('<form class="sform" action="/search/users" method="get" role="search"><p><label for="uq"><b>Find a member by name</b></label><br>'
+            '<span class="row"><input id="uq" name="search" type="search" value="%s" minlength="2" required><button class="btn primary" type="submit">Find</button></span></p></form>' % e(term))
     res = ""
     if len(term) >= 2:
         data = api("/api/search/users", {"search": term, "limit": 50, "page": page}, ttl=60)
         users = data.get("users") or []
         count = int(data.get("count") or 0)
-        pages = int(data.get("page_count") or 1)
-        pg = pager("/search/users?search=%s" % e(urllib.parse.quote_plus(term)), page, pages, "Member result pages")
-        items = "".join('<li>%s%s</li>' % (avatar_html(u.get("avatar"), u.get("username"), 32), user_link(u.get("username"))) for u in users)
+        pg = pager("/search/users?search=%s" % e(urllib.parse.quote_plus(term)), page, int(data.get("page_count") or 1), "Member result pages")
+        rows = "".join('<tr><td class="ic">%s</td><td class="info">%s</td></tr>' % (avatar_html(u.get("avatar"), u.get("username"), 28), user_link(u.get("username"), "bn"))
+                       for u in users)
         more = " (showing the first 500)" if count >= 500 else ""
-        res = ('<p class="sub count" role="status">%s member%s matching <b>%s</b>%s</p>%s<section class="panel">%s</section>%s'
-               % (num(count), "" if count == 1 else "s", e(term), more, pg,
-                  '<ul class="members">%s</ul>' % items if users else '<p class="pad muted">No member names contain that text.</p>', pg))
+        res = ('<div class="bar">%s</div><div class="tb"><h2 class="catbg">%s member%s matching “%s”%s</h2>%s</div>'
+               % (pg, num(count), "" if count == 1 else "s", e(term), more,
+                  '<table class="grid members"><tbody>%s</tbody></table>' % rows if users else '<p class="pad muted">No member names contain that text.</p>'))
     elif term:
-        res = '<p class="sub count" role="status">Type at least 2 characters.</p>'
-    body = '<div class="head"><h1>Members</h1></div><section class="panel pad">%s</section>%s' % (form, res)
+        res = '<p class="warn">Type at least 2 characters.</p>'
+    body = '%s<div class="tb"><h1 class="catbg">Members</h1><div class="pad">%s</div></div>%s' % (crumbs_html([("Members", "/search/users")]), form, res)
     return layout("Members", body, noindex=bool(term), active="members", canonical="/search/users")
 
 
@@ -780,6 +1046,8 @@ def smf_redirect(raw_query):
         return "/profile/%s" % args["u"]
     if args.get("action") == "search":
         return "/search/posts"
+    if args.get("action") == "recent":
+        return "/recent"
     return None
 
 
@@ -791,11 +1059,14 @@ ROUTES = [
      lambda m, q: page_profile(urllib.parse.unquote(m.group(1)), q, m.group(2) or "")),
     (re.compile(r"^/search/posts/?$"), lambda m, q: page_search_posts(q)),
     (re.compile(r"^/search(?:/users)?/?$"), lambda m, q: page_search_users(q)),
+    (re.compile(r"^/recent/?$"), lambda m, q: page_recent(q)),
+    (re.compile(r"^/compose/?$"), lambda m, q: page_compose(q)),
 ]
 STATIC_TYPES = {".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8",
                 ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".ico": "image/x-icon"}
-CSP = ("default-src 'none'; img-src * data:; style-src 'self' 'unsafe-inline'; script-src 'self'; "
+CSP = ("default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; "
        "form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+IMG_ROUTE = re.compile(r"^/img/([0-9a-f]{24})/([A-Za-z0-9_-]{8,4000})$")
 
 
 def asset_version():
@@ -844,6 +1115,14 @@ class Handler(BaseHTTPRequestHandler):
         with open(path, "rb") as f:
             self._send(200, f.read(), STATIC_TYPES[ext_], "public, max-age=31536000, immutable")
 
+    def _image(self, m):
+        url = imgproxy.decode(m.group(1), m.group(2))
+        got = imgproxy.get(url) if url else None
+        if not got:
+            return self._send(404, b"", "text/plain; charset=utf-8", "public, max-age=3600")
+        self._send(200, got[1], got[0], "public, max-age=2592000, immutable",
+                   {"Content-Security-Policy": "default-src 'none'; sandbox", "Content-Disposition": "inline"})
+
     def _proxy_api(self):
         try:
             with urllib.request.urlopen(API + self.path, timeout=30) as r:
@@ -861,6 +1140,9 @@ class Handler(BaseHTTPRequestHandler):
             q = urllib.parse.parse_qs(p.query, keep_blank_values=True)
             if path.startswith("/static/"):
                 return self._static(path)
+            im = IMG_ROUTE.match(path)
+            if im:
+                return self._image(im)
             if path in ("/favicon.ico", "/robots.txt"):
                 return self._static("favicon.svg" if path == "/favicon.ico" else "robots.txt")
             if path.startswith("/api/"):
@@ -875,14 +1157,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(403, message_page(
                     "Not available in the archive",
                     "This is a read-only archive with no accounts, messages or settings. Use bitcointalk.org for anything that needs you to sign in.",
-                    "<p>%s</p>" % ext("https://bitcointalk.org", "Go to bitcointalk.org", "btn ghost")), cache="no-store")
+                    "<p>%s</p>" % act("https://bitcointalk.org", "Go to bitcointalk.org")), cache="no-store")
             for rx, fn in ROUTES:
                 m = rx.match(path)
                 if m:
                     out = fn(m, q)
                     if isinstance(out, tuple):
                         return self._redirect(out[1])
-                    return self._send(200, out)
+                    return self._send(200, out, cache="no-store" if path.startswith("/compose") else "public, max-age=30")
             raise NotFound()
         except NotFound:
             self._send(404, message_page("Page not found", "That board, topic, member or page is not in the archive."
