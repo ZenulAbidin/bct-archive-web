@@ -974,13 +974,18 @@ def page_profile(name, q, sub=""):
     extra = []
     if lists and any(lists.values()):
         def names(key):
-            return ", ".join(user_link(x["username"]) for x in lists[key]) or '<span class="muted">nobody</span>'
+            return ", ".join('<b title="DT%d member">%s</b>' % (x["dt"], user_link(x["username"])) if x.get("dt") else user_link(x["username"])
+                             for x in lists[key]) or '<span class="muted">nobody</span>'
         extra.append('<details class="tb"><summary class="titlebg">Trust lists (DefaultTrust network, LoyceV snapshot)</summary><table class="grid kv"><tbody>'
                      '<tr><th scope="row">Included by (%d)</th><td>%s</td></tr><tr><th scope="row">Excluded by (%d)</th><td>%s</td></tr>'
                      '<tr><th scope="row">Includes (%d)</th><td>%s</td></tr><tr><th scope="row">Excludes (%d)</th><td>%s</td></tr>'
-                     '</tbody></table><p class="pad small muted">Feedback comments are only visible to signed-in members on bitcointalk.org; use Trust feedback above.</p></details>'
+                     '</tbody></table><p class="pad small muted">%sNames in <b>bold</b> are DefaultTrust members (DT1 or DT2). '
+                     'Feedback comments are only visible to signed-in members on bitcointalk.org; use Trust feedback above.</p>'
+                     '<p class="pad small">%s</p></details>'
                      % (len(lists["trusted_by"]), names("trusted_by"), len(lists["distrusted_by"]), names("distrusted_by"),
-                        len(lists["trusts"]), names("trusts"), len(lists["distrusts"]), names("distrusts")))
+                        len(lists["trusts"]), names("trusts"), len(lists["distrusts"]), names("distrusts"),
+                        "%s is a DT%d member. " % (e(uname), lists["dt"]) if lists.get("dt") else "",
+                        act(bct("action=trust;settings"), "Trust settings", "Edit your own trust list on bitcointalk.org")))
     if stats and stats.get("boards"):
         top = max(b["posts"] for b in stats["boards"]) or 1
         brow = "".join('<tr><td><a href="/boards/%s">%s</a></td><td class="pb"><span style="width:%.0f%%"></span></td><td class="n">%s</td></tr>'
