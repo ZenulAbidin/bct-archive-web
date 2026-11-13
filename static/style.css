@@ -1,6 +1,9 @@
 /* SPDX-License-Identifier: MIT — Bitcointalk archive frontend.
    A dense, table-based forum layout in the tradition of Simple Machines Forum, in Bitcoin orange.
    System fonts only, no images. Light theme by default; dark when <html data-theme="dark">. */
+/* Colour emoji first, but only for emoji code points: otherwise text fonts such as DejaVu Sans draw them as grey outlines. */
+@font-face { font-family: "Emoji"; src: local("Apple Color Emoji"), local("Segoe UI Emoji"), local("Noto Color Emoji"), local("Twemoji Mozilla");
+  unicode-range: U+1F000-1FAFF, U+1F1E6-1F1FF, U+2600-27BF, U+2B00-2BFF, U+2300-23FF, U+2190-21FF, U+3030, U+303D, U+3297, U+3299, U+FE0F, U+200D, U+20E3, U+E0020-E007F; }
 :root {
   --bg: #e8e4dd; --win: #f3efe8; --win2: #fbf9f5; --text: #1f1a14; --muted: #5c5246;
   --line: #bdb4a6; --link: #96450a; --link-hover: #5f2b00; --visited: #7a4a2a;
@@ -8,7 +11,7 @@
   --cat: #b4500a; --cat-2: #9c4306; --on-cat: #ffffff; --cat-line: #6e2f03;
   --title: #f1e2cd; --title-line: #d3bd9f; --quote: #fffaf0; --quote-line: #d8a86a; --code: #f6f1e7;
   --pos: #1c6b2c; --neg: #b3261e; --focus: #7a3300; --icon-off: #a9a093; --icon-on: #e07d08;
-  --font: verdana, "DejaVu Sans", "Noto Sans", sans-serif; --mono: ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
+  --font: "Emoji", verdana, "DejaVu Sans", "Noto Sans", sans-serif; --mono: "Emoji", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
 }
 :root[data-theme="dark"] {
   --bg: #14110e; --win: #1e1a16; --win2: #24201b; --text: #ece5db; --muted: #b0a595;

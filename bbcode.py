@@ -16,6 +16,12 @@ _QUOTE_HEAD = re.compile(r"^Quote from:\s*(.+?)\s+on\s+(.+)$", re.S)
 _LINK = re.compile(r"/threads/(\d+)(?:\?post=\d+)?#(\d+)$")
 
 
+_SMILEY = re.compile(r"bitcointalk\.org/Smileys/[^/]+/([A-Za-z0-9_]+)\.gif$")
+SMILEYS = {"smiley": ":)", "wink": ";)", "cheesy": ":D", "grin": ";D", "angry": ">:(", "sad": ":(", "shocked": ":o",
+           "cool": "8)", "huh": "???", "rolleyes": "::)", "tongue": ":P", "embarrassed": ":-[", "lipsrsealed": ":-X",
+           "undecided": ":-\\", "kiss": ":-*", "cry": ":'("}
+
+
 def _image_source(src):
     try:
         p = urllib.parse.urlsplit(src)
@@ -46,7 +52,11 @@ class _ToBB(HTMLParser):
             return
         if tag == "img":
             if a.get("src"):
-                self.emit("[img]%s[/img]" % _image_source(a["src"]))
+                m = _SMILEY.search(a["src"])
+                if m and m.group(1).lower() in SMILEYS:
+                    self.emit(SMILEYS[m.group(1).lower()])   # forum smileys go back to their text codes
+                else:
+                    self.emit("[img]%s[/img]" % _image_source(a["src"]))
             return
         if tag == "div" and cls == "quoteheader":
             self.head = {"text": [], "href": ""}
