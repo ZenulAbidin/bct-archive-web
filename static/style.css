@@ -143,9 +143,8 @@ details.merited > summary::-webkit-details-marker { display: none; }
 :root[data-theme="dark"] .sig table { background: #ecedf3; color: #1b1b1b; }
 :root[data-theme="dark"] .sig table a { color: #476c8e; }
 /* Bitcointalk line layout (see balanced() in archive_web.py): blocks have no minimum line height, each text run sets its own */
-.sig, .sig div, .sig td, .tight, .tight div, .tight td, .tight li { line-height: 0; }
-.sig .t { line-height: var(--lh, 1.3em); }
-.tight .t { line-height: var(--lh, 1.35em); }
+/* Pages use the same document type as bitcointalk.org (XHTML 1.0 Transitional), so browsers lay out lines of tiny
+   text the way they do there. Banner signatures built from 2pt characters depend on that. */
 .acts { margin-top: 6px; padding-top: 4px; border-top: 1px dotted var(--line); display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px 12px; font-size: 11px; }
 
 /* polls, statistics bars, key-value tables */

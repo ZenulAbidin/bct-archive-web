@@ -490,7 +490,7 @@ def layout(title, body, q="", canonical="", noindex=False, active="", scripts=()
         return '<a href="%s"%s>%s</a>' % (href, ' class="on" aria-current="page"' if active == key else "", text)
     src = ' | <a href="%s" rel="noopener">Source code (MIT)</a>' % e(SOURCE_URL) if SOURCE_URL else ""
     extra = "".join('<script src="/static/%s?v=%s" defer></script>\n' % (s, ASSET_V) for s in scripts)
-    return """<!doctype html>
+    return """<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html lang="en">
 <head>
 <meta charset="utf-8">
