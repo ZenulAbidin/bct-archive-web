@@ -391,6 +391,8 @@ ICON_BOARD = ('<svg class="bi %s" viewBox="0 0 32 32" width="30" height="30" rol
               '<path class="b2" d="M26 12h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-1v3l-4-3h-7a2 2 0 0 1-2-2v-.5h7a4 4 0 0 0 4-4z"/></svg>')
 ICON_TOPIC = ('<svg class="ti %s" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">'
               '<path d="M3 1.5h7l3 3v10H3z"/><path class="b2" d="M5.5 7h5M5.5 9.5h5M5.5 12h3" fill="none"/></svg>')
+ICON_FOLD = ('<svg class="fold" viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">'
+             '<path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>')
 ICON_POST = ('<svg class="pi" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">'
              '<path d="M2 2.5h12v8H8l-3.5 3v-3H2z"/></svg>')
 
@@ -747,8 +749,13 @@ def page_thread(tid, q):
                 act(bct("topic=%d.msg%s#msg%s" % (tid, pid, pid)), "Ignore", "Opens the post on bitcointalk.org, where Ignore sits under the author"))
         merit = ""
         if p.get("merit"):
-            merit = '<div class="merited">Merited: <b>+%s</b> by %s member%s</div>' % (
-                num(p["merit"].get("total")), num(p["merit"].get("senders")), "" if p["merit"].get("senders") == 1 else "s")
+            mt = p["merit"]
+            head = 'Merited: <b>+%s</b> by %s member%s' % (num(mt.get("total")), num(mt.get("senders")), "" if mt.get("senders") == 1 else "s")
+            if mt.get("by"):
+                merit = ('<details class="merited" open><summary title="Show or hide who sent merit">%s%s</summary><div class="mby">%s</div></details>'
+                         % (ICON_FOLD, head, ", ".join("%s (%s)" % (user_link(x["username"]), num(x["merit"])) for x in mt["by"])))
+            else:
+                merit = '<div class="merited">%s</div>' % head
         sig = '<div class="sig" aria-label="Signature">%s</div>' % balanced(u["signature"], tight=True) if u.get("signature") else ""
         tools = '<a href="/compose?topic=%d&amp;quote=%s">Quote</a> %s' % (
             tid, pid, act(bct("action=merit;msg=%s" % pid), "Merit", "Send merit for this post"))

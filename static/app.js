@@ -43,6 +43,13 @@
     var w = window.open(a.href, 'bitcointalk', 'popup=yes,width=1000,height=760,noopener=no');
     if (w) { ev.preventDefault(); try { w.opener = null; w.focus(); } catch (e) {} }
   });
+  // 6. Merit sender lists: remember whether the reader keeps them folded.
+  var folded = false;
+  try { folded = localStorage.getItem('merit-folded') === '1'; } catch (e) {}
+  document.querySelectorAll('details.merited').forEach(function (d) {
+    if (folded) d.open = false;
+    d.addEventListener('toggle', function () { try { localStorage.setItem('merit-folded', d.open ? '0' : '1'); } catch (e) {} });
+  });
   // 5. Theme switch (light is the default).
   var b = document.getElementById('theme');
   if (b) {

@@ -121,6 +121,10 @@ ul.plain { list-style: none; margin: 0; padding: 0; } ul.plain li { padding: 1px
 .pnum { font-size: 11px; white-space: nowrap; }
 .ptools { display: flex; gap: 10px; font-size: 11px; font-weight: bold; white-space: nowrap; }
 .merited { font-size: 11px; color: var(--pos); }
+details.merited > summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 4px; }
+details.merited > summary::-webkit-details-marker { display: none; }
+.merited .fold { transition: none; transform: rotate(-90deg); } details.merited[open] .fold { transform: none; }
+.mby { color: var(--fg); padding: 1px 0 0 15px; line-height: 1.5; }
 .content { padding: 8px 0 4px; --pt: 1.3px; overflow-x: auto; }
 .content img, .sig img { max-width: 100%; height: auto; }
 .content table { max-width: 100%; }
