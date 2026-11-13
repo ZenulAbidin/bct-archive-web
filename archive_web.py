@@ -542,7 +542,7 @@ def page_board(bid, q):
            "<th scope=\"col\" class=\"n\">Replies</th><th scope=\"col\" class=\"n\">Views</th><th scope=\"col\">Last post</th>" \
            "</tr></thead><tbody>%s</tbody></table></section>%s%s" % (
                crumbs_html(board_crumbs(board)), e(board.get("name") or "Board"), num(total), num(board.get("post_count")),
-               ext("%s?action=post;board=%s.0" % (BCT, bid), "New topic on bitcointalk.org", "btn ghost"),
+               ext("%s?action=post;board=%s.0" % (BCT, bid), "New topic", "btn ghost"),
                kids, pg, "".join(rows) or '<tr><td colspan="4" class="muted">No topics.</td></tr>', pg, capped)
     return layout(board.get("name") or "Board", body, active="boards",
                   canonical=base if page == 1 else "%s?page=%d" % (base, page))
@@ -629,8 +629,8 @@ def page_thread(tid, q):
             '<article class="entry" id="%s" aria-label="Post %s by %s">%s'
             '<aside class="author">%s<div class="who">%s%s<ul class="stats">%s</ul></div></aside>'
             '<div class="pbody"><header><span class="pdate">%s</span><span class="ptools">'
-            '<a href="%s?action=post;quote=%s;topic=%d" rel="noopener nofollow" title="Quote this post on bitcointalk.org">Quote</a>'
-            '<a href="%s?topic=%d.msg%s#msg%s" rel="noopener nofollow" title="Open this post on bitcointalk.org">Original</a>'
+            '<a href="%s?action=post;quote=%s;topic=%d" rel="noopener nofollow" title="Quote this post">Quote</a>'
+            '<a href="%s?topic=%d.msg%s#msg%s" rel="noopener nofollow" title="Open the original post">Original</a>'
             '<a class="pnum" href="%s#%s" title="Link to this post">#%s</a></span></header>'
             '<div class="content">%s</div>%s</div></article>'
             % (p["id"], num(p.get("position")), e(name), last,
@@ -640,7 +640,7 @@ def page_thread(tid, q):
                base if page == 1 else "%s?page=%d" % (base, page), p["id"], num(p.get("position")),
                post_body(p.get("body_html"), tid, on_page), sig))
     pg = pager(base, page, pages, "Topic pages")
-    reply = ext("%s?action=post;topic=%d.0" % (BCT, tid), "Reply on bitcointalk.org", "btn")
+    reply = ext("%s?action=post;topic=%d.0" % (BCT, tid), "Reply", "btn")
     body = ('%s<div class="head"><h1>%s</h1><p class="sub">%s posts · page %s of %s</p>%s</div>%s'
             '<div class="tools">%s</div><div class="posts">%s</div><div class="tools">%s%s</div>'
             % (crumbs_html(crumbs), e(title), num(count), num(page), num(pages), reply,
@@ -687,7 +687,7 @@ def page_profile(name, q, sub=""):
         facts.append(("DefaultTrust", tr.replace("Trust: ", "")))
     dl = "".join("<div><dt>%s</dt><dd>%s</dd></div>" % f for f in facts)
     links = " ".join([
-        ext(u.get("profile_on_bitcointalk") or "%s?action=profile;u=%s" % (BCT, u.get("id")), "Profile on bitcointalk.org", "btn ghost"),
+        ext(u.get("profile_on_bitcointalk") or "%s?action=profile;u=%s" % (BCT, u.get("id")), "Original profile", "btn ghost"),
         ext(u.get("merit_history_url") or "#", "Merit history", "btn ghost"),
         ext("https://bpip.org/Profile?p=%s" % urllib.parse.quote(uname), "Trust feedback (BPIP)", "btn ghost")])
     sig = '<div class="sig full" aria-label="Signature">%s</div>' % balanced(u["signature"], tight=True) if u.get("signature") else ""
