@@ -256,7 +256,7 @@ class _Balancer(HTMLParser):
         if tag == "img":
             src = html.unescape(dict(attrs).get("src") or "")
             if src.startswith(("http://", "https://")):
-                attrs = [(k, imgproxy.proxied(imgproxy.original(src)) if k == "src" else v) for k, v in attrs]
+                attrs = [(k, imgproxy.proxied(imgproxy.original(src), src) if k == "src" else v) for k, v in attrs]
             elif not src.startswith("/"):
                 return
             a = "".join(' %s="%s"' % (k, html.escape(html.unescape(v or ""), quote=True)) for k, v in attrs)

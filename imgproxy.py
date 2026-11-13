@@ -20,6 +20,7 @@ import base64
 import hashlib
 import hmac
 import http.client
+import json
 import ipaddress
 import os
 import socket
@@ -37,14 +38,22 @@ CACHE = os.environ.get("IMG_CACHE", "")
 _slots = threading.BoundedSemaphore(8)
 _ctx = ssl.create_default_context()
 _TYPES = {"png": "image/png", "jpg": "image/jpeg", "gif": "image/gif", "webp": "image/webp"}
+try:  # SHA-256 of pictures that only say "invalid image" (Bitcointalk's proxy placeholder)
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "placeholders.json")) as _f:
+        PLACEHOLDERS = set(json.load(_f))
+except (OSError, ValueError):
+    PLACEHOLDERS = set()
 
 
 def sign(url):
     return hmac.new(SECRET, url.encode("utf-8", "surrogatepass"), hashlib.sha256).hexdigest()[:24]
 
 
-def proxied(url):
-    """Local address under which `url` is served."""
+def proxied(url, fallback=None):
+    """Local address under which `url` is served. `fallback` is a second address to try when
+    the first no longer answers (for old posts: Bitcointalk's own cached copy)."""
+    if fallback and fallback != url and "\n" not in url + fallback:
+        url = url + "\n" + fallback
     b = base64.urlsafe_b64encode(url.encode("utf-8", "surrogatepass")).rstrip(b"=").decode()
     return "/img/%s/%s" % (sign(url), b)
 
@@ -177,7 +186,17 @@ def get(url):
     if not _slots.acquire(timeout=15):
         return None
     try:
-        kind, data = fetch(url)
+        kind = data = None
+        for candidate in url.split("\n")[:2]:
+            try:
+                kind, data = fetch(candidate)
+                if hashlib.sha256(data).hexdigest() in PLACEHOLDERS:
+                    raise ValueError("placeholder")
+                break
+            except Exception:
+                kind = data = None
+        if data is None:
+            raise ValueError("unavailable")
     except Exception:
         if CACHE:
             try:
