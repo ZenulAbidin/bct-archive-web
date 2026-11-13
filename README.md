@@ -28,6 +28,7 @@ All settings are environment variables.
 | `BOARD_DESCRIPTIONS` | none | JSON file `{"board id": "text"}` shown under board names |
 | `IMG_CACHE` | none | Folder for cached images. Set this |
 | `IMG_SECRET` | random | Signs image links. Set this too, or the links change on every restart |
+| `TALKIMG_KEY` | none | TalkImg API key. Turns on picture upload in the editor |
 
 ## URLs
 
@@ -48,6 +49,8 @@ All settings are environment variables.
 ## Things worth knowing
 
 **Nobody logs in here.** There are no accounts and the site never asks for a Bitcointalk password. Reply, Quote and New topic open an editor with a preview; when you are done it copies your text and opens the real form on bitcointalk.org. PM, Merit, Report and Trust just open the matching Bitcointalk page.
+
+**Picture upload is optional.** With `TALKIMG_KEY` set, the editor can upload a picture to TalkImg. The key must stay secret, so the picture passes through this server on the way; it is checked (PNG, JPEG, GIF or WebP, 8 MB), passed on and not kept. The text of a draft is never sent to the server.
 
 **Images go through our own proxy** (`imgproxy.py`). Old posts point at Bitcointalk's image proxy, and most of those links have expired. We fetch the original picture once, check that it really is a PNG, JPEG, GIF or WebP under 8 MB, and serve it from `/img/`. The proxy only fetches links this server signed and refuses private addresses.
 

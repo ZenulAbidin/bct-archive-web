@@ -1,5 +1,6 @@
-// SPDX-License-Identifier: MIT — BBCode composer. Everything here stays in the browser:
-// the draft lives in localStorage and the preview is rendered locally. Nothing is sent to the server.
+// SPDX-License-Identifier: MIT — BBCode composer. Your text stays in the browser:
+// the draft lives in localStorage and the preview is rendered locally. The text is never sent to the
+// server; only a picture you choose to upload is, on its way to TalkImg.
 (function () {
   var box = document.getElementById('composer'); if (!box) return;
   var msg = document.getElementById('msg'), subject = document.getElementById('subject');
@@ -38,7 +39,9 @@
       s = s.replace(/\[color=(#[0-9a-f]{3,8}|[a-z]{3,20})\]([\s\S]*?)\[\/color\]/gi, '<span style="color: $1">$2</span>');
       s = s.replace(/\[url=([^\]\s]+)\]([\s\S]*?)\[\/url\]/gi, function (_, u, c) { return '<a href="' + safeUrl(u) + '" rel="noopener nofollow" target="_blank">' + c + '</a>'; });
       s = s.replace(/\[url\]([^\[\s]+)\[\/url\]/gi, function (_, u) { return '<a href="' + safeUrl(u) + '" rel="noopener nofollow" target="_blank">' + u + '</a>'; });
-      s = s.replace(/\[img[^\]]*\]([^\[\s]+)\[\/img\]/gi, '<span class="img-gone">Image: $1</span>');
+      s = s.replace(/\[img[^\]]*\]([^\[\s]+)\[\/img\]/gi, function (_, u) {
+        return shown[u] ? '<img src="' + shown[u] + '" alt="Uploaded image">' : '<span class="img-gone">Image: ' + u + '</span>';
+      });
       s = s.replace(/\[quote(?:\s+author=([^\]]*?))?(?:\s+link=[^\]\s]*)?(?:\s+date=(\d+))?\]([\s\S]*?)\[\/quote\]/gi, function (_, a, d, c) {
         var head = a ? 'Quote from: ' + a + (d ? ' on ' + new Date(+d * 1000).toLocaleString() : '') : 'Quote';
         return '<div class="quoteheader">' + head + '</div><div class="quote">' + c.replace(/^\n+|\n+$/g, '') + '</div>';
@@ -63,6 +66,41 @@
     msg.focus(); update();
   }
   function say(t) { status.textContent = t; }
+  // Pictures: button, paste or drop. The file goes to TalkImg through this site; the text never does.
+  var shown = {};
+  try { shown = JSON.parse(sessionStorage.getItem('uploaded') || '{}'); } catch (e) {}
+  function insert(text) {
+    msg.setRangeText(text, msg.selectionStart, msg.selectionEnd, 'end');
+    msg.focus(); update();
+  }
+  function send(file) {
+    if (!file || !/^image\/(png|jpeg|gif|webp)$/.test(file.type)) return say('Only PNG, JPEG, GIF and WebP pictures can be uploaded.');
+    if (file.size > 8 * 1024 * 1024) return say('The picture is too large (limit 8 MB).');
+    say('Uploading picture…');
+    fetch('/upload-image', { method: 'POST', body: file, headers: { 'Content-Type': 'application/octet-stream', 'X-Composer': '1' } })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (r) {
+        if (!r.ok || !r.j.url) return say(r.j.error || 'The upload failed.');
+        shown[r.j.url] = r.j.preview;
+        try { sessionStorage.setItem('uploaded', JSON.stringify(shown)); } catch (e) {}
+        insert('[img]' + r.j.url + '[/img]');
+        say('Picture uploaded.');
+      }, function () { say('The upload failed. Check your connection and try again.'); });
+  }
+  var up = document.getElementById('upload'), file = document.getElementById('file');
+  if (up && file) {
+    up.addEventListener('click', function () { file.click(); });
+    file.addEventListener('change', function () { send(file.files[0]); file.value = ''; });
+    msg.addEventListener('paste', function (ev) {
+      var items = (ev.clipboardData || {}).files || [];
+      if (items.length && /^image\//.test(items[0].type)) { ev.preventDefault(); send(items[0]); }
+    });
+    msg.addEventListener('dragover', function (ev) { ev.preventDefault(); });
+    msg.addEventListener('drop', function (ev) {
+      var f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+      if (f) { ev.preventDefault(); send(f); }
+    });
+  }
   function copy(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);
     return new Promise(function (ok, fail) {

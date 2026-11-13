@@ -32,6 +32,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import bbcode
 import imgproxy
+import talkimg
 
 API = os.environ.get("ARCHIVE_API", "http://127.0.0.1:18183").rstrip("/")
 BIND = os.environ.get("BIND", "127.0.0.1")
@@ -873,20 +874,26 @@ def page_compose(q):
         ("b", "Bold"), ("i", "Italic"), ("u", "Underline"), ("s", "Strikethrough"), ("quote", "Quote"), ("code", "Code"),
         ("url", "Link"), ("img", "Image"), ("size", "Text size"), ("color", "Text colour"), ("list", "List"),
         ("center", "Centre"), ("tt", "Monospace"), ("hr", "Horizontal line")))
+    uploader = ('<p class="row upl"><button type="button" class="btn" id="upload">Upload image</button>'
+                '<input type="file" id="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>'
+                '<span class="small muted">or paste or drop a picture into the message. It is uploaded to '
+                '<a href="https://talkimg.com" rel="noopener">TalkImg</a> through this site (PNG, JPEG, GIF, WebP, up to 8 MB).</span></p>'
+                if talkimg.enabled() else "")
     body = ('%s<div class="tb"><h1 class="catbg">%s</h1><div class="pad composer" id="composer" data-key="%s" data-target="%s">'
             '<noscript><p class="warn">The composer needs JavaScript. You can also %s.</p></noscript>'
             '%s<div class="toolbar" role="toolbar" aria-label="Formatting">%s</div>'
             '<label class="sr" for="msg">Message (BBCode)</label><textarea id="msg" rows="12" spellcheck="true"></textarea>'
+            '%s'
             '<textarea id="prefill" hidden>%s</textarea>'
             '<p class="row"><button type="button" class="btn primary" id="go">Copy and open Bitcointalk</button>'
             '<button type="button" class="btn" data-copy="msg">Copy only</button>'
             '<button type="button" class="btn" id="clear">Clear draft</button><span id="status" role="status" class="small"></span></p>'
-            '<p class="small muted">Your draft is kept only in this browser. Nothing you type here is sent to this site, and this site never asks for '
+            '<p class="small muted">Your draft is kept only in this browser. The text you type here is not sent to this site, and this site never asks for '
             'your Bitcointalk login. Pressing the first button copies the message and opens the real form on bitcointalk.org in a new window: '
             '<b>paste your message there and press Post.</b></p>'
             '<h2 class="titlebg">Preview</h2><div id="preview" class="content preview" aria-live="polite"></div></div></div>'
             % (crumbs_html(crumbs), e(heading), e(key), e(target), act(target, "write directly on bitcointalk.org"),
-               subject, tools, e(prefill)))
+               subject, tools, uploader, e(prefill)))
     return layout(heading, body, noindex=True, active="boards", scripts=("composer.js",))
 
 
@@ -1239,7 +1246,7 @@ STATIC_TYPES = {".css": "text/css; charset=utf-8", ".js": "text/javascript; char
                 ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".ico": "image/x-icon", ".png": "image/png",
                 ".webmanifest": "application/manifest+json"}
 CSP = ("default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; "
-       "form-action 'self'; base-uri 'none'; frame-ancestors 'none'; manifest-src 'self'")
+       "form-action 'self'; base-uri 'none'; frame-ancestors 'none'; manifest-src 'self'; connect-src 'self'")
 IMG_ROUTE = re.compile(r"^/img/([0-9a-f]{24})/([A-Za-z0-9_-]{8,4000})$")
 
 
@@ -1352,7 +1359,30 @@ class Handler(BaseHTTPRequestHandler):
     do_HEAD = do_GET
 
     def do_POST(self):
+        if urllib.parse.urlparse(self.path).path == "/upload-image":
+            return self._upload()
         self._send(405, message_page("Read-only", "This archive does not accept posts or other changes."), cache="no-store")
+
+    def _upload(self):
+        """Composer picture -> TalkImg. The picture is passed on and forgotten; nothing is logged."""
+        def reply(code, obj):
+            self._send(code, json.dumps(obj), "application/json", "no-store")
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            n = 0
+        origin = self.headers.get("Origin") or ""
+        host = self.headers.get("Host") or ""
+        if not talkimg.enabled():
+            return reply(404, {"error": "Image upload is not available."})
+        if not origin or urllib.parse.urlsplit(origin).netloc != host or self.headers.get("X-Composer") != "1":
+            return reply(403, {"error": "Uploads are only accepted from the composer on this site."})
+        if n <= 0 or n > talkimg.MAX_BYTES:
+            self.close_connection = True
+            return reply(413, {"error": "The picture is too large (limit 8 MB)."})
+        data = self.rfile.read(n)
+        code, obj = talkimg.upload(data)
+        reply(code, obj)
 
 
 def main():
