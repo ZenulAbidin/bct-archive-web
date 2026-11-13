@@ -644,12 +644,12 @@ def page_board(bid, q):
         hot = "hot" if pc > 100 else ("new" if is_recent(t.get("last_post_created_at")) else "")
         starter = user_link(t.get("started_by")) if t.get("started_by") else '<span class="muted">-</span>'
         rows.append(
-            '<tr><td class="ic">%s</td><td class="info"><a class="tn" href="/threads/%s">%s</a>%s'
+            '<tr><td class="ic">%s</td><td class="info">%s<a class="tn" href="/threads/%s">%s</a>%s'
             '<div class="m-stats">Started by %s · %s replies · %s views</div>'
             '<div class="m-last">Last post by %s, <a href="/threads/%s?last=1">%s</a></div></td>'
             '<td class="w2 starter">%s</td><td class="w1 n">%s</td><td class="w1 n">%s</td>'
             '<td class="last"><a href="/threads/%s?last=1">%s</a><br>by %s</td></tr>'
-            % (ICON_TOPIC % hot, t["id"], e(clean_title(t.get("title"))), mini, starter, num(max(0, pc - 1)),
+            % (ICON_TOPIC % hot, '<b class="sticky">Sticky:</b> ' if t.get("sticky") else "", t["id"], e(clean_title(t.get("title"))), mini, starter, num(max(0, pc - 1)),
                num(t.get("view_count")), user_link(t.get("last_post_username")), t["id"], when(t.get("last_post_created_at")),
                starter, num(max(0, pc - 1)), num(t.get("view_count")),
                t["id"], when(t.get("last_post_created_at")), user_link(t.get("last_post_username"))))
