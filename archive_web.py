@@ -1241,6 +1241,13 @@ def search_form(term, adv, q):
     boards = forum()["boards"]
     opts = "".join('<option value="%s"%s>%s%s</option>' % (b["id"], " selected" if val("board_id") == str(b["id"]) else "",
                                                            "- " * max(0, len(b["segs"]) - 2), e(b["name"])) for b in boards.values())
+    def date_field(name, label):
+        # The label is next to the field, not around it: some phone browsers close the date
+        # picker again when the field sits inside its own label. The Clear button needs the script.
+        return ('<div class="fld"><label for="f-%s">%s</label><span class="dt">'
+                '<input id="f-%s" name="%s" type="date" min="2009-11-22" max="%s" value="%s">'
+                '<button type="button" class="btn dclr" data-clear="f-%s" hidden>Clear</button></span></div>'
+                % (name, label, name, name, time.strftime("%%Y-%%m-%%d", time.gmtime(time.time() + 86400)), val(name), name))
     advanced = ('<details class="adv"%s><summary><b>Advanced search</b> (ranked by TalkSearch)</summary>'
                 '<form class="sform grid2" action="/search/posts" method="get"><input type="hidden" name="adv" value="1">'
                 '<label>All of these words<input name="search" type="search" value="%s"></label>'
@@ -1249,11 +1256,10 @@ def search_form(term, adv, q):
                 '<label>None of these words<input name="without_words" value="%s"></label>'
                 '<label>By member<input name="author" value="%s" autocomplete="off"></label>'
                 '<label>In board<select name="board_id"><option value="">All boards</option>%s</select></label>'
-                '<label>From date<input name="date_from" type="date" value="%s"></label>'
-                '<label>To date<input name="date_to" type="date" value="%s"></label>'
+                '%s%s'
                 '<p><button class="btn primary" type="submit">Search</button></p></form></details>'
                 % (" open" if adv else "", e(term), val("exact_phrase"), val("any_words"), val("without_words"), val("author"),
-                   opts, val("date_from"), val("date_to")))
+                   opts, date_field("date_from", "From date"), date_field("date_to", "To date")))
     return simple + advanced
 
 

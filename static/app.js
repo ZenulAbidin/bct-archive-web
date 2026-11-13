@@ -57,6 +57,15 @@
     if (folded) d.open = false;
     d.addEventListener('toggle', function () { try { localStorage.setItem('merit-folded', d.open ? '0' : '1'); } catch (e) {} });
   });
+  // 8. Date fields in the search form: a Clear button, shown only while a date is set.
+  document.querySelectorAll('button[data-clear]').forEach(function (c) {
+    var f = document.getElementById(c.getAttribute('data-clear'));
+    if (!f) return;
+    var show = function () { c.hidden = !f.value; };
+    f.addEventListener('input', show); f.addEventListener('change', show);
+    c.addEventListener('click', function () { f.value = ''; show(); });
+    show();
+  });
   // 5. Theme switch (light is the default).
   var b = document.getElementById('theme');
   if (b) {

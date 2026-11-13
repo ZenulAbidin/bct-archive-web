@@ -161,7 +161,8 @@ details.merited > summary::-webkit-details-marker { display: none; }
 .row input { flex: 1 1 260px; max-width: 520px; height: 26px; }
 .adv { margin-top: 8px; } .adv summary { cursor: pointer; padding: 4px 0; }
 .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; max-width: 760px; }
-.grid2 label { display: grid; gap: 2px; font-size: 11px; font-weight: bold; } .grid2 input, .grid2 select { height: 26px; width: 100%; }
+.grid2 label, .grid2 .fld { display: grid; gap: 2px; font-size: 11px; font-weight: bold; } .grid2 input, .grid2 select { height: 26px; width: 100%; }
+.grid2 .fld, .dt { min-width: 0; } .dt { display: flex; gap: 4px; } .dt input { flex: 1 1 0; min-width: 0; } .dt .dclr { flex: none; height: 26px; } .dclr[hidden] { display: none; }
 .excerpt { margin-top: 3px; max-width: 110ch; }
 .results tr:nth-child(even) td { background: var(--win); }
 .members .ic { width: 40px; } .members .avatar { display: block; }
@@ -192,6 +193,9 @@ textarea#msg { width: 100%; min-height: 220px; font: 13px/1.4 var(--mono); resiz
   .pname { margin: 0; } .ulinks { margin: 0 0 0 auto; }
   .posts td.msg { border-left: 0; padding: 6px 8px 8px; }
   .acts { justify-content: flex-start; gap: 6px 14px; } .acts a, .ulinks a { padding: 3px 0; }
+  /* 16px keeps phones from zooming into a field, and the taller boxes are easier to hit */
+  .sform input, .sform select { font-size: 16px; } .grid2 input, .grid2 select, .row input, .dt .dclr { height: 40px; } .row .btn { height: 40px; }
+  .grid2 label, .grid2 .fld { font-size: 13px; }
   .two, .grid2 { grid-template-columns: 1fr; } .summary { flex-direction: column-reverse; } .kv th { width: 130px; white-space: normal; }
   .pages a, .pages b { display: inline-block; padding: 4px 3px; }
 }
