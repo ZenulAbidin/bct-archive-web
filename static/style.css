@@ -201,3 +201,9 @@ textarea#msg { width: 100%; min-height: 220px; font: 13px/1.4 var(--mono); resiz
 .upl { margin: 4px 0; align-items: center; gap: 8px; } .preview img { max-width: 100%; height: auto; }
 .sticky { font-size: 11px; color: var(--muted); }
 .fb td { vertical-align: top; } .fb .nw { white-space: nowrap; } .fb .cm { min-width: 220px; overflow-wrap: anywhere; } .fb b.pos { color: var(--pos); } .fb b.neg { color: var(--neg); } .scroll { overflow-x: auto; }
+.mods { font-size: 11px; color: var(--muted); padding-top: 1px; }
+.sort { white-space: nowrap; margin-left: 2px; } .sort a { font-size: 9px; padding: 0 1px; color: var(--muted); text-decoration: none; }
+.sort a.on, .m-sort a.on { color: var(--link); font-weight: bold; } .sort a:hover { color: var(--link); }
+.topics th.bump, .topics td.bump { width: 52px; text-align: center; }
+.m-sort { display: none; padding: 4px 10px; margin: 0; } .m-sort a { padding: 2px 3px; }
+@media (max-width: 760px) { .m-sort { display: block; } .topics td.bump { display: none; } }

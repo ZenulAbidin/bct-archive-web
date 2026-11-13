@@ -554,6 +554,16 @@ def message_page(title, text, extra=""):
 
 
 # --------------------------------------------------------------------------- board index and boards
+def moderators_html(bid):
+    try:
+        names = (api("/api/board-moderators", ttl=600) or {}).get(str(bid)) or []
+    except (NotFound, Upstream):
+        names = []
+    if not names:
+        return ""
+    return '<div class="mods"><i>Moderator%s: %s</i></div>' % ("" if len(names) == 1 else "s", ", ".join(user_link(x) for x in names))
+
+
 def board_row(n, boards):
     last = '<span class="muted">No posts</span>'
     if n.get("last_thread_id"):
@@ -565,12 +575,13 @@ def board_row(n, boards):
         kids = '<div class="kids"><b>Child Boards</b>: %s</div>' % ", ".join(
             '<a href="/boards/%s">%s</a>' % (k, e(boards[k]["name"])) for k in n["kids"])
     desc = DESCRIPTIONS.get(str(n["id"]), "")
+    mods = moderators_html(n["id"])
     new = is_recent(n.get("last_post_created_at"))
     return ('<tr><td class="ic">%s</td><td class="info"><a class="bn" href="/boards/%s">%s</a>%s%s'
             '<div class="m-stats">%s Posts, %s Topics</div>%s</td>'
             '<td class="stats">%s Posts<br>%s Topics</td><td class="last">%s</td></tr>'
             % (ICON_BOARD % ("new" if new else "", "New posts in the last day" if new else "No new posts in the last day"),
-               n["id"], e(n["name"]), '<div class="desc">%s</div>' % e(desc) if desc else "", kids,
+               n["id"], e(n["name"]), ('<div class="desc">%s</div>' % e(desc) if desc else "") + mods, kids,
                num(n.get("post_count")), num(n.get("thread_count")),
                '<div class="m-last">Last post by %s, %s</div>' % (user_link(n.get("last_post_username")), when(n.get("last_post_created_at")))
                if n.get("last_thread_id") else "",
@@ -625,17 +636,52 @@ def page_board(bid, q):
     page = max(1, int(q.get("page", ["1"])[0] or 1))
     if (page - 1) * PER_PAGE >= MAX_WINDOW:
         page = MAX_WINDOW // PER_PAGE
-    data = api("/api/threads", {"board_id": bid, "limit": PER_PAGE, "page": page}, ttl=20)
+    sort = (q.get("sort", [""])[0] or "").lower()
+    sort = sort if sort in SORT_COLUMNS else ""
+    direction = "asc" if (q.get("dir", [""])[0] or "").lower() == "asc" else "desc"
+    params = {"board_id": bid, "limit": PER_PAGE, "page": page}
+    if sort:
+        params.update({"sort": sort, "dir": direction})
+    data = api("/api/threads", params, ttl=20)
     board = data["board"]
+    bump_board = bool(data.get("bump_board"))
+    default_sort = not sort or (sort == "last_post" and direction == "desc" and not bump_board)
     if not node and not data.get("normal"):
         raise NotFound()
     name = (node or board).get("name") or "Board"
     total = int(board.get("thread_count") or 0)
     pages = max(1, min(math.ceil(total / PER_PAGE), MAX_WINDOW // PER_PAGE))
-    base = "/boards/%s" % bid
+    plain = "/boards/%s" % bid
+    base = plain if default_sort else "%s?sort=%s&amp;dir=%s" % (plain, sort, direction)
+
+    def th(label, key, cls=""):
+        """Column header with an up and a down arrow; the active one is marked."""
+        def arrow(d, sym):
+            on = (sort == key and direction == d) or (not sort and not bump_board and key == "last_post" and d == "desc")
+            return '<a href="%s?sort=%s&amp;dir=%s"%s title="Sort by %s, %s" aria-label="Sort by %s, %s">%s</a>' % (
+                plain, key, d, ' class="on" aria-current="true"' if on else "", label.lower(),
+                "ascending" if d == "asc" else "descending", label.lower(), "ascending" if d == "asc" else "descending", sym)
+        return '<th scope="col"%s>%s <span class="sort">%s%s</span></th>' % (
+            ' class="%s"' % cls if cls else "", label, arrow("asc", "&#9650;"), arrow("desc", "&#9660;"))
+    bump_th = ""
+    if bump_board:
+        bump_th = ('<th scope="col" class="n bump">Bump <span class="sort"><a href="%s"%s title="Bitcointalk\'s own order for this board" '
+                   'aria-label="Sort by bump order">&#9660;</a></span></th>' % (plain, ' class="on" aria-current="true"' if not sort else ""))
+    m_sort = '<p class="m-sort small">Sort: %s%s</p>' % (
+        '<a href="%s"%s>Bump order</a> · ' % (plain, ' class="on"' if not sort else "") if bump_board else "",
+        " · ".join('%s <a href="%s?sort=%s&amp;dir=asc"%s>&#9650;</a><a href="%s?sort=%s&amp;dir=desc"%s>&#9660;</a>'
+                   % (lab, plain, k, ' class="on"' if sort == k and direction == "asc" else "", plain, k,
+                      ' class="on"' if (sort == k and direction == "desc") or (not sort and not bump_board and k == "last_post") else "")
+                   for k, lab in (("last_post", "Last post"), ("replies", "Replies"), ("views", "Views"), ("subject", "Subject"), ("started", "Started"))))
     rows = []
+    rank = (page - 1) * PER_PAGE
     for t in (data.get("sticky") or []) + (data.get("normal") or []):
         pc = int(t.get("post_count") or 1)
+        bump_td = ""
+        if bump_board:
+            if not t.get("sticky"):
+                rank += 1
+            bump_td = '<td class="w1 n bump">%s</td>' % (num(rank) if not sort and not t.get("sticky") else "")
         tp = math.ceil(pc / PER_PAGE)
         mini = ""
         if tp > 1:
@@ -652,11 +698,11 @@ def page_board(bid, q):
             '<tr><td class="ic">%s</td><td class="info">%s<a class="tn" href="/threads/%s">%s</a>%s'
             '<div class="m-stats">Started by %s · %s replies · %s views</div>'
             '<div class="m-last">Last post by %s, <a href="/threads/%s?last=1">%s</a></div></td>'
-            '<td class="w2 starter">%s</td><td class="w1 n">%s</td><td class="w1 n">%s</td>'
+            '%s<td class="w2 starter">%s</td><td class="w1 n">%s</td><td class="w1 n">%s</td>'
             '<td class="last"><a href="/threads/%s?last=1">%s</a><br>by %s</td></tr>'
             % (ICON_TOPIC % hot, '<b class="sticky">Sticky:</b> ' if t.get("sticky") else "", t["id"], e(clean_title(t.get("title"))), mini, starter, num(max(0, pc - 1)),
                num(t.get("view_count")), user_link(t.get("last_post_username")), t["id"], when(t.get("last_post_created_at")),
-               starter, num(max(0, pc - 1)), num(t.get("view_count")),
+               bump_td, starter, num(max(0, pc - 1)), num(t.get("view_count")),
                t["id"], when(t.get("last_post_created_at")), user_link(t.get("last_post_username"))))
     kids = ""
     if node and node["kids"]:
@@ -669,14 +715,16 @@ def page_board(bid, q):
     if math.ceil(total / PER_PAGE) > pages and page == pages:
         capped = '<p class="small muted">Older topics in this board are reachable through search.</p>'
     desc = DESCRIPTIONS.get(str(bid), "")
-    body = ('%s%s<div class="bar">%s%s</div><div class="tb"><h1 class="catbg">%s%s</h1><table class="grid topics"><thead><tr class="titlebg">'
-            '<th scope="col" class="ic"><span class="sr">Status</span></th><th scope="col">Subject</th><th scope="col" class="starter">Started by</th>'
-            '<th scope="col" class="n">Replies</th><th scope="col" class="n">Views</th><th scope="col">Last post</th></tr></thead>'
+    heads = (th("Subject", "subject") + bump_th + th("Started by", "started", "starter") + th("Replies", "replies", "n")
+             + th("Views", "views", "n") + th("Last post", "last_post"))
+    body = ('%s%s<div class="bar">%s%s</div><div class="tb"><h1 class="catbg">%s%s</h1>%s%s<table class="grid topics"><thead><tr class="titlebg">'
+            '<th scope="col" class="ic"><span class="sr">Status</span></th>%s</tr></thead>'
             '<tbody>%s</tbody></table></div><div class="bar">%s%s</div>%s'
             % (crumbs_html(board_trail(bid) or [(name, base)]), kids, pg, buttons, e(name),
                ' <span class="sub">%s</span>' % e(desc) if desc else "",
-               "".join(rows) or '<tr><td colspan="6" class="muted">No topics.</td></tr>', pg, buttons, capped))
-    return layout(name, body, active="boards", canonical=base if page == 1 else "%s?page=%d" % (base, page))
+               '<div class="pad small">%s</div>' % moderators_html(bid) if moderators_html(bid) else "", m_sort, heads,
+               "".join(rows) or '<tr><td colspan="7" class="muted">No topics.</td></tr>', pg, buttons, capped))
+    return layout(name, body, active="boards", canonical=plain if page == 1 else "%s?page=%d" % (plain, page), noindex=not default_sort)
 
 
 # --------------------------------------------------------------------------- topics
@@ -1297,6 +1345,7 @@ def smf_redirect(raw_query):
 
 
 ACCOUNT_ONLY = re.compile(r"^/(messages|settings|patrol|mentions|watchlist|login|register|join|reset|confirm|admin|threads/posted)(/|$)")
+SORT_COLUMNS = ("subject", "started", "replies", "views", "last_post")
 ROUTES = [
     (re.compile(r"^/boards/(\d+)/?$"), lambda m, q: page_board(int(m.group(1)), q)),
     (re.compile(r"^/threads/(\d+)(?:/[^/]*)?/?$"), lambda m, q: page_thread(int(m.group(1)), q)),
