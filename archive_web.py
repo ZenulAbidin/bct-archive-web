@@ -798,15 +798,16 @@ def page_history(pid):
     versions = hist.get("versions") or []
     rows = []
     for i, v in enumerate(versions):
-        rows.append('<tr class="post %s"><td class="poster"><b>Version %d</b><div>%s</div>%s</td>'
+        rows.append('<tr class="post %s"><td class="poster"><b>Version %d</b><div>%s</div>%s%s</td>'
                     '<td class="msg"><div class="content">%s</div></td></tr>'
                     % ("alt" if i % 2 else "", i + 1, when(v.get("date")),
                        '<div class="neg">Post was deleted</div>' if v.get("deleted") else "",
+                       '<div class="small muted">Recorded by %s</div>' % ("TalkSearch" if v.get("source") == "talksearch" else "BitList"),
                        post_body(v.get("body_html"), tid, ())))
     if not hist.get("available"):
         note = "<p>The edit history could not be loaded just now. Try again in a minute, or use the link below.</p>"
     elif not versions:
-        note = "<p>BitList has no earlier version of this post: it was not edited, or it was posted before BitList began recording.</p>"
+        note = "<p>No earlier version of this post is on record: it was not edited, or the edit happened when nobody was recording.</p>"
     else:
         note = "<p>%d recorded version%s, oldest first. The version now in the archive is shown last.</p>" % (
             len(versions), "" if len(versions) == 1 else "s")
@@ -814,8 +815,8 @@ def page_history(pid):
                 '<td class="msg"><div class="content">%s</div></td></tr>'
                 % (when(post.get("created_at")), post_body(post.get("body_html"), tid, ())))
     body = ('%s<div class="tb"><h1 class="catbg">Edit history of a post by %s</h1><div class="pad">%s'
-            '<p class="small">Versions are recorded by the <a href="https://bitlist.co" rel="noopener">BitList Archive</a> '
-            'and shown with permission. %s</p></div>'
+            '<p class="small">Edits made since 13 November 2026 are recorded by TalkSearch itself. Older versions (up to April 2025) come from the '
+            '<a href="https://bitlist.co" rel="noopener">BitList Archive</a> and are shown with permission. %s</p></div>'
             '<table class="grid posts"><tbody>%s</tbody></table></div>'
             % (crumbs_html([("Back to the post", back), ("Edit history", "")]), e(name), note, bitlist, "".join(rows)))
     return layout("Edit history", body, noindex=True, active="boards")
