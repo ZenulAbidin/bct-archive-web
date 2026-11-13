@@ -480,7 +480,8 @@ TAG_HTML = _tag_html()
 
 
 def layout(title, body, q="", canonical="", noindex=False, active="", scripts=()):
-    full = "%s - %s" % (title, SITE) if title else "%s %s" % (SITE, SITE_TAG)
+    site_full = ("%s %s" % (SITE, SITE_TAG)).strip()
+    full = "%s - %s" % (title, site_full) if title else site_full
 
     def tab(href, text, key):
         return '<a href="%s"%s>%s</a>' % (href, ' class="on" aria-current="page"' if active == key else "", text)
@@ -492,6 +493,9 @@ def layout(title, body, q="", canonical="", noindex=False, active="", scripts=()
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>%s</title>
+<meta property="og:title" content="%s">
+<meta property="og:site_name" content="%s">
+<meta property="og:type" content="website">
 %s%s<meta name="color-scheme" content="light dark">
 <script src="/static/theme.js?v=%s"></script>
 <link rel="stylesheet" href="/static/style.css?v=%s">
@@ -525,7 +529,7 @@ def layout(title, body, q="", canonical="", noindex=False, active="", scripts=()
 </div>
 </body>
 </html>
-""" % (e(full),
+""" % (e(full), e(full), e(site_full),
        '<link rel="canonical" href="%s">\n' % e(canonical) if canonical else "",
        '<meta name="robots" content="noindex">\n' if noindex else "",
        ASSET_V, ASSET_V, ASSET_V, extra, e(SITE), TAG_HTML, e(q),
