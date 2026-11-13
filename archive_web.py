@@ -495,7 +495,11 @@ def layout(title, body, q="", canonical="", noindex=False, active="", scripts=()
 %s%s<meta name="color-scheme" content="light dark">
 <script src="/static/theme.js?v=%s"></script>
 <link rel="stylesheet" href="/static/style.css?v=%s">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/static/site.webmanifest">
+<meta name="theme-color" content="#f7931a">
 <script src="/static/app.js?v=%s" defer></script>
 %s</head>
 <body>
@@ -1206,9 +1210,10 @@ ROUTES = [
     (re.compile(r"^/compose/?$"), lambda m, q: page_compose(q)),
 ]
 STATIC_TYPES = {".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8",
-                ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".ico": "image/x-icon"}
+                ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".ico": "image/x-icon", ".png": "image/png",
+                ".webmanifest": "application/manifest+json"}
 CSP = ("default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; "
-       "form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+       "form-action 'self'; base-uri 'none'; frame-ancestors 'none'; manifest-src 'self'")
 IMG_ROUTE = re.compile(r"^/img/([0-9a-f]{24})/([A-Za-z0-9_-]{8,4000})$")
 
 
@@ -1286,8 +1291,8 @@ class Handler(BaseHTTPRequestHandler):
             im = IMG_ROUTE.match(path)
             if im:
                 return self._image(im)
-            if path in ("/favicon.ico", "/robots.txt"):
-                return self._static("favicon.svg" if path == "/favicon.ico" else "robots.txt")
+            if path in ("/favicon.ico", "/robots.txt", "/apple-touch-icon.png", "/apple-touch-icon-precomposed.png"):
+                return self._static("apple-touch-icon.png" if path.startswith("/apple") else path[1:])
             if path.startswith("/api/"):
                 return self._proxy_api()
             if path in ("/", "/index.php") and p.query:
