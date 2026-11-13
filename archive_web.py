@@ -430,7 +430,6 @@ def layout(title, body, q="", canonical="", noindex=False, active=""):
 <button type="submit" aria-label="Search">%s</button>
 </form>
 </div>
-<p class="notice"><span class="wrap">Unofficial read-only archive of public Bitcointalk posts. Not affiliated with bitcointalk.org. To post or reply, use %s.</span></p>
 </header>
 <main id="main" class="wrap">
 %s
@@ -446,7 +445,7 @@ def layout(title, body, q="", canonical="", noindex=False, active=""):
        '<meta name="robots" content="noindex">\n' if noindex else "",
        ASSET_V, ASSET_V, e(SITE), e(SITE_TAG),
        nav("/", "Boards", "boards"), nav("/search/posts", "Search", "search"), nav("/search/users", "Members", "members"),
-       e(q), ICON_SEARCH, ext("https://bitcointalk.org", "bitcointalk.org"), body, e(SITE), e(SITE_TAG), src)
+       e(q), ICON_SEARCH, body, e(SITE), e(SITE_TAG), src)
 
 
 def message_page(title, text, extra=""):
