@@ -43,6 +43,7 @@ SITE_TAG_URL = os.environ.get("SITE_TAGLINE_URL", "https://talksearch.io")  # th
 SOURCE_URL = os.environ.get("SOURCE_URL", "")
 TALKSEARCH_API = os.environ.get("TALKSEARCH_API", "").rstrip("/")   # optional: ranked advanced search
 BOARD_DESCRIPTIONS = os.environ.get("BOARD_DESCRIPTIONS", "")        # optional JSON file {board id: text}
+BOARD_SEQUENCE = os.environ.get("BOARD_SEQUENCE", "")                # optional JSON list of board ids in display order
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 PER_PAGE = 25           # same page size as the previous client, so old ?page=N links still match
 MAX_WINDOW = 10000      # the API cannot page topic lists / search results past this many rows
@@ -341,6 +342,17 @@ except (OSError, ValueError):
     DESCRIPTIONS = {}
 
 
+def _load_sequence():
+    try:
+        with open(BOARD_SEQUENCE) as f:
+            return {int(b): i for i, b in enumerate(json.load(f))}
+    except (OSError, ValueError, TypeError):
+        return {}
+
+
+SEQUENCE = _load_sequence()
+
+
 def forum():
     """Every board as a tree (all levels), built from the API's flat list and its path strings."""
     hit = _cache.get("#forum")
@@ -360,7 +372,11 @@ def forum():
             if pid is not None and pid != bid:
                 n["parent"] = pid
                 boards[pid]["kids"].append(bid)
-    cats = [(c.get("name") or "", [b["id"] for b in c.get("boards", []) if b["id"] in boards])
+    pos = lambda i: (SEQUENCE.get(i, 10 ** 6), i)   # the forum's own order; unknown boards go last, by id
+    for n in boards.values():
+        n["kids"].sort(key=pos)
+    boards = {i: boards[i] for i in sorted(boards, key=pos)}
+    cats = [(c.get("name") or "", sorted((b["id"] for b in c.get("boards", []) if b["id"] in boards), key=pos))
             for c in index.get("boards", [])]
     f = {"boards": boards, "cats": cats, "recent": index.get("threads") or []}
     _cache["#forum"] = (time.time() + 45, f)

@@ -26,6 +26,7 @@ All settings are environment variables.
 | `SOURCE_URL` | none | Adds a "Source code" link to the footer |
 | `TALKSEARCH_API` | none | TalkSearch search API; turns on advanced search |
 | `BOARD_DESCRIPTIONS` | none | JSON file `{"board id": "text"}` shown under board names |
+| `BOARD_SEQUENCE` | none | JSON list of board ids in the order to show them (default: by id) |
 | `IMG_CACHE` | none | Folder for cached images. Set this |
 | `IMG_SECRET` | random | Signs image links. Set this too, or the links change on every restart |
 | `TALKIMG_KEY` | none | TalkImg API key. Turns on picture upload in the editor |

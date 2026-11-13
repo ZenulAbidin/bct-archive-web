@@ -204,6 +204,6 @@ textarea#msg { width: 100%; min-height: 220px; font: 13px/1.4 var(--mono); resiz
 .mods { font-size: 11px; color: var(--muted); padding-top: 1px; }
 .sort { white-space: nowrap; margin-left: 2px; } .sort a { font-size: 9px; padding: 0 1px; color: var(--muted); text-decoration: none; }
 .sort a.on, .m-sort a.on { color: var(--link); font-weight: bold; } .sort a:hover { color: var(--link); }
-.topics th.bump, .topics td.bump { width: 52px; text-align: center; }
+.topics th.bump, .topics td.bump { width: 70px; text-align: center; white-space: nowrap; }
 .m-sort { display: none; padding: 4px 10px; margin: 0; } .m-sort a { padding: 2px 3px; }
 @media (max-width: 760px) { .m-sort { display: block; } .topics td.bump { display: none; } }
