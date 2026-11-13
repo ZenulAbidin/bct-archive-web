@@ -504,8 +504,8 @@ def layout(title, body, q="", canonical="", noindex=False, active="", scripts=()
 %s
 </main>
 <footer class="ft">
-<p>%s %s is an unofficial, read-only archive of public Bitcointalk posts and is not affiliated with bitcointalk.org. Posts belong to their authors. No accounts, trackers or ads; replies, merit and other actions open on bitcointalk.org itself.</p>
-<p>Data: public posts and profiles from <a href="https://bitcointalk.org" rel="noopener">bitcointalk.org</a>; trust lists and merit totals from <a href="https://loyce.club" rel="noopener">LoyceV</a>; post edit history from the <a href="https://bitlist.co" rel="noopener">BitList Archive</a>; search by <a href="https://talksearch.io" rel="noopener">TalkSearch</a>.</p>
+<p>%s %s is an unofficial, read-only archive of public Bitcointalk posts and is not affiliated with bitcointalk.org. Posts belong to their authors.</p>
+<p>Credits: public posts and profiles from <a href="https://bitcointalk.org" rel="noopener">bitcointalk.org</a>; trust lists and merit totals from <a href="https://loyce.club" rel="noopener">LoyceV</a>; post edit history from the <a href="https://bitlist.co" rel="noopener">BitList Archive</a>; search by <a href="https://talksearch.io" rel="noopener">TalkSearch</a>.</p>
 <p><a href="/">Home</a> | <a href="/search/posts">Search</a> | <a href="/search/users">Members</a>%s</p>
 </footer>
 </div>
