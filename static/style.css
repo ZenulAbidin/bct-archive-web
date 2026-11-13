@@ -209,3 +209,4 @@ textarea#msg { width: 100%; min-height: 220px; font: 13px/1.4 var(--mono); resiz
 @media (max-width: 760px) { .m-sort { display: block; } .topics td.bump { display: none; } }
 .topics td.n, .boards td.stats { white-space: nowrap; }
 .fb td:first-child, .fb th, .fb td:nth-child(4) { white-space: nowrap; }
+.topics thead th { white-space: nowrap; vertical-align: middle; }
