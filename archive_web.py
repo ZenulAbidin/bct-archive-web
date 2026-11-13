@@ -974,7 +974,7 @@ def page_profile(name, q, sub=""):
     actions = " ".join([
         '<a class="btn" href="%s/stats">Statistics</a>' % base,
         act(bct("action=pm;sa=send;u=%s" % uid), "Send PM", "", "btn"),
-        act(bct("action=trust;u=%s" % uid), "Trust feedback", "View or leave feedback", "btn"),
+        '<a class="btn" href="%s/trust">Trust feedback</a>' % base,
         act(bct("action=merit;u=%s" % uid), "Merit", "Merit sent and received", "btn"),
         act(bct("action=profile;u=%s;sa=showPosts" % uid), "All posts", "", "btn"),
         act(bct("action=profile;u=%s;sa=statPanel" % uid), "Forum stats", "", "btn"),
@@ -1074,6 +1074,52 @@ def page_user_stats(name):
             '<p class="pad small muted">Posting figures are counted from the posts in this archive. Merit figures come from the public merit data published by LoyceV.</p></div>'
             % (crumbs_html([("Members", "/search/users"), (uname, base), ("Statistics", "")]), e(uname), dl, "".join(b for b in blocks if b)))
     return layout("Statistics - %s" % uname, body, active="members", canonical=base + "/stats")
+
+
+def page_user_trust(name):
+    quoted = urllib.parse.quote(name, safe="")
+    u = api("/api/users/%s" % quoted, ttl=60)
+    uname = u.get("username") or name
+    uid = u.get("id")
+    base = "/profile/%s" % urllib.parse.quote(uname, safe="")
+    try:
+        fb = api("/api/trust/%s/feedback" % quoted, ttl=20)
+    except (NotFound, Upstream):
+        fb = {"available": False, "pending": True}
+
+    def table(key, heading, col):
+        rows = fb.get(key) or []
+        if not rows:
+            return '<div class="tb"><h2 class="titlebg">%s (0)</h2><p class="pad muted">None.</p></div>' % heading
+        body = "".join(
+            '<tr><td>%s</td><td class="nw">%s</td><td class="nw"><b class="%s">%s</b></td><td class="nw">%s</td><td>%s</td><td class="cm">%s</td></tr>'
+            % ('<b title="DT%d member">%s</b>' % (r["dt"], user_link(r["username"])) if r.get("dt") else user_link(r["username"]),
+               when(r.get("date"), short=True) or e(r.get("date") or ""),
+               {"positive": "pos", "negative": "neg"}.get(r.get("rating"), ""), e((r.get("rating") or "").capitalize()),
+               e(r.get("risked") or ""),
+               '<a href="%s" rel="noopener nofollow ugc">Reference</a>' % e(r["reference"]) if str(r.get("reference") or "").startswith(("http://", "https://")) else "",
+               e(r.get("comment") or ""))
+            for r in rows)
+        return ('<div class="tb"><h2 class="titlebg">%s (%d)</h2><div class="scroll"><table class="grid fb"><thead><tr class="titlebg">'
+                '<th scope="col">%s</th><th scope="col">Date</th><th scope="col">Rating</th><th scope="col">Risked BTC</th>'
+                '<th scope="col">Reference</th><th scope="col">Comments</th></tr></thead><tbody>%s</tbody></table></div></div>'
+                % (heading, len(rows), col, body))
+    tr = trust_html(u.get("stats"), "")
+    if fb.get("available"):
+        note = ('<p class="small muted">Read from bitcointalk.org %s%s. "Trusted" and "untrusted" follow that viewer\'s trust list, as on Bitcointalk. '
+                '%sBold names are DefaultTrust members.</p>'
+                % (when(fb.get("fetched_at")) or "recently", ", as seen by %s" % e(fb["viewed_as"]) if fb.get("viewed_as") else "",
+                   "A newer copy is being fetched; reload in a minute. " if fb.get("pending") else ""))
+        tables = table("trusted", "Trusted feedback", "From") + table("untrusted", "Untrusted feedback", "From") + table("sent", "Sent feedback", "To")
+    else:
+        note = '<p>The feedback for this member is being fetched from bitcointalk.org. Reload this page in a minute.</p>'
+        tables = ""
+    body = ('%s<div class="tb"><h1 class="catbg">Trust feedback - %s</h1><div class="pad"><p><b>Trust:</b> %s</p>%s<p class="btns">%s %s</p></div></div>%s'
+            % (crumbs_html([("Members", "/search/users"), (uname, base), ("Trust feedback", "")]), e(uname),
+               tr or '<span class="muted">no feedback counted by DefaultTrust</span>', note,
+               act(bct("action=trust;u=%s" % uid), "Leave feedback", "Opens the trust page on bitcointalk.org", "btn"),
+               act(bct("action=trust;settings"), "Trust settings", "", "btn"), tables))
+    return layout("Trust feedback - %s" % uname, body, active="members", noindex=True)
 
 
 def page_forum_stats():
@@ -1254,9 +1300,10 @@ ACCOUNT_ONLY = re.compile(r"^/(messages|settings|patrol|mentions|watchlist|login
 ROUTES = [
     (re.compile(r"^/boards/(\d+)/?$"), lambda m, q: page_board(int(m.group(1)), q)),
     (re.compile(r"^/threads/(\d+)(?:/[^/]*)?/?$"), lambda m, q: page_thread(int(m.group(1)), q)),
+    (re.compile(r"^/profile/([^/]+)/trust/?$"), lambda m, q: page_user_trust(urllib.parse.unquote(m.group(1)))),
     (re.compile(r"^/profile/([^/]+)/stats/?$"), lambda m, q: page_user_stats(urllib.parse.unquote(m.group(1)))),
     (re.compile(r"^/stats/?$"), lambda m, q: page_forum_stats()),
-    (re.compile(r"^/profile/([^/]+)(?:/(posts|trust))?/?$"),
+    (re.compile(r"^/profile/([^/]+)(?:/(posts))?/?$"),
      lambda m, q: page_profile(urllib.parse.unquote(m.group(1)), q, m.group(2) or "")),
     (re.compile(r"^/search/posts/?$"), lambda m, q: page_search_posts(q)),
     (re.compile(r"^/search(?:/users)?/?$"), lambda m, q: page_search_users(q)),
@@ -1269,6 +1316,7 @@ STATIC_TYPES = {".css": "text/css; charset=utf-8", ".js": "text/javascript; char
                 ".webmanifest": "application/manifest+json"}
 CSP = ("default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; "
        "form-action 'self'; base-uri 'none'; frame-ancestors 'none'; manifest-src 'self'; connect-src 'self'")
+SEEN_ROUTE = re.compile(r"^/seen/(\d{1,10})$")
 IMG_ROUTE = re.compile(r"^/img/([0-9a-f]{24})/([A-Za-z0-9_-]{8,4000})$")
 
 
@@ -1350,6 +1398,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self._static("apple-touch-icon.png" if path.startswith("/apple") else path[1:])
             if path.startswith("/api/"):
                 return self._proxy_api()
+            sm = SEEN_ROUTE.match(path)
+            if sm:   # a browser showing a topic page: ask for that page to be re-checked for edits first
+                try:
+                    api("/internal/note-view", {"topic": int(sm.group(1)), "page": max(1, int((q.get("p", ["1"])[0] or "1")[:6]))})
+                except Exception:
+                    pass
+                return self._send(204, b"", "text/plain; charset=utf-8", "no-store")
             if path in ("/", "/index.php") and p.query:
                 to = smf_redirect(p.query)
                 if to:

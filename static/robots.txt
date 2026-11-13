@@ -3,3 +3,4 @@ Disallow: /api/
 Disallow: /search/
 Disallow: /history/
 Disallow: /compose
+Disallow: /seen/

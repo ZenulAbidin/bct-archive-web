@@ -43,6 +43,13 @@
     var w = window.open(a.href, 'bitcointalk', 'popup=yes,width=1000,height=760,noopener=no');
     if (w) { ev.preventDefault(); try { w.opener = null; w.focus(); } catch (e) {} }
   });
+  // 7. Tell the server this topic page is on a reader's screen, so it is re-checked for edits first.
+  //    Only the topic and page number are sent; nothing is stored about the reader.
+  var tp = /^\/threads\/(\d+)/.exec(location.pathname);
+  if (tp && document.querySelector('table.posts') && document.visibilityState !== 'hidden') {
+    var pg = /[?&]page=(\d+)/.exec(location.search);
+    try { fetch('/seen/' + tp[1] + '?p=' + (pg ? pg[1] : 1), { cache: 'no-store', keepalive: true }); } catch (e) {}
+  }
   // 6. Merit sender lists: remember whether the reader keeps them folded.
   var folded = false;
   try { folded = localStorage.getItem('merit-folded') === '1'; } catch (e) {}
