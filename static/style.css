@@ -189,3 +189,4 @@ textarea#msg { width: 100%; min-height: 220px; font: 13px/1.4 var(--mono); resiz
   .pages a, .pages b { display: inline-block; padding: 4px 3px; }
 }
 @media print { .hd, .tabs, .ft, .bar, .acts, .ulinks { display: none; } body { background: #fff; } }
+.poster .neg { color: var(--neg); }

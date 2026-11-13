@@ -16,6 +16,7 @@ Epochtalk Vue client used) and keeps that client's public URLs working.
 | `/threads/<id>?page=N` | Topic (25 posts per page); `?start=N`, `?post=<post id>` and `?last=1` redirect to the right page |
 | `/threads/<id>#<post id>` | Link to one post |
 | `/profile/<name or user id>` | Member profile and post history (`/posts`, `/trust` also answer) |
+| `/history/<post id>` | Earlier versions of a post, from the BitList Archive (needs `/api/posts/<id>/history` on the API) |
 | `/search/posts?search=...` | Post search |
 | `/search/users?search=...` | Member search |
 | `/index.php?topic=T.msgP`, `?topic=T.N`, `?board=B.N`, `?action=profile;u=ID` | Bitcointalk-style links, redirected |

@@ -505,7 +505,7 @@ def layout(title, body, q="", canonical="", noindex=False, active="", scripts=()
 </main>
 <footer class="ft">
 <p>%s %s is an unofficial, read-only archive of public Bitcointalk posts and is not affiliated with bitcointalk.org. Posts belong to their authors. No accounts, trackers or ads; replies, merit and other actions open on bitcointalk.org itself.</p>
-<p>Data: public posts and profiles from <a href="https://bitcointalk.org" rel="noopener">bitcointalk.org</a>; trust lists and merit totals from <a href="https://loyce.club" rel="noopener">LoyceV</a>; edit history links to the <a href="https://bitlist.co" rel="noopener">BitList Archive</a>; search by <a href="https://talksearch.io" rel="noopener">TalkSearch</a>.</p>
+<p>Data: public posts and profiles from <a href="https://bitcointalk.org" rel="noopener">bitcointalk.org</a>; trust lists and merit totals from <a href="https://loyce.club" rel="noopener">LoyceV</a>; post edit history from the <a href="https://bitlist.co" rel="noopener">BitList Archive</a>; search by <a href="https://talksearch.io" rel="noopener">TalkSearch</a>.</p>
 <p><a href="/">Home</a> | <a href="/search/posts">Search</a> | <a href="/search/users">Members</a>%s</p>
 </footer>
 </div>
@@ -734,7 +734,7 @@ def page_thread(tid, q):
             '<a href="/compose?topic=%d&amp;quote=%s">Quote</a>' % (tid, pid),
             act(bct("action=merit;msg=%s" % pid), "Send merit"),
             act(bct("action=reporttm;topic=%d.0;msg=%s" % (tid, pid)), "Report", "Report this post to the moderators"),
-            act("https://bitlist.co/post/%s" % pid, "Edit history", "Earlier versions of this post, kept by the BitList Archive"),
+            '<a href="/history/%s" rel="nofollow" title="Earlier versions of this post, kept by the BitList Archive">Edit history</a>' % pid,
             act(bct("topic=%d.msg%s#msg%s" % (tid, pid, pid)), "Original", "This post on bitcointalk.org")])
         rows.append(
             '<tr class="post %s" id="%s"><td class="poster">%s<b class="pname">%s</b>%s%s%s%s</td>'
@@ -755,6 +755,43 @@ def page_thread(tid, q):
             % (crumbs_html(crumbs), poll_html(thread.get("poll")) if page == 1 else "", pg, buttons, e(title), num(count),
                "".join(rows), pg, buttons))
     return layout(title, body, active="boards", canonical=here)
+
+
+# --------------------------------------------------------------------------- post edit history
+def page_history(pid):
+    post = api("/api/posts/%d" % pid, ttl=60)
+    tid = int(post.get("thread_id") or 0)
+    name = (post.get("user") or {}).get("username") or "(unknown)"
+    back = "/threads/%d?post=%d#%d" % (tid, pid, pid)
+    bitlist = act("https://bitlist.co/post/%d" % pid, "Open this post on BitList")
+    try:
+        hist = api("/api/posts/%d/history" % pid, ttl=300)
+    except (NotFound, Upstream):
+        hist = {"available": False, "busy": True}
+    versions = hist.get("versions") or []
+    rows = []
+    for i, v in enumerate(versions):
+        rows.append('<tr class="post %s"><td class="poster"><b>Version %d</b><div>%s</div>%s</td>'
+                    '<td class="msg"><div class="content">%s</div></td></tr>'
+                    % ("alt" if i % 2 else "", i + 1, when(v.get("date")),
+                       '<div class="neg">Post was deleted</div>' if v.get("deleted") else "",
+                       post_body(v.get("body_html"), tid, ())))
+    if not hist.get("available"):
+        note = "<p>The edit history could not be loaded just now. Try again in a minute, or use the link below.</p>"
+    elif not versions:
+        note = "<p>BitList has no earlier version of this post: it was not edited, or it was posted before BitList began recording.</p>"
+    else:
+        note = "<p>%d recorded version%s, oldest first. The version now in the archive is shown last.</p>" % (
+            len(versions), "" if len(versions) == 1 else "s")
+    rows.append('<tr class="post"><td class="poster"><b>In the archive now</b><div>%s</div></td>'
+                '<td class="msg"><div class="content">%s</div></td></tr>'
+                % (when(post.get("created_at")), post_body(post.get("body_html"), tid, ())))
+    body = ('%s<div class="tb"><h1 class="catbg">Edit history of a post by %s</h1><div class="pad">%s'
+            '<p class="small">Versions are recorded by the <a href="https://bitlist.co" rel="noopener">BitList Archive</a> '
+            'and shown with permission. %s</p></div>'
+            '<table class="grid posts"><tbody>%s</tbody></table></div>'
+            % (crumbs_html([("Back to the post", back), ("Edit history", "")]), e(name), note, bitlist, "".join(rows)))
+    return layout("Edit history", body, noindex=True, active="boards")
 
 
 # --------------------------------------------------------------------------- composer
@@ -1060,6 +1097,7 @@ ROUTES = [
     (re.compile(r"^/search/posts/?$"), lambda m, q: page_search_posts(q)),
     (re.compile(r"^/search(?:/users)?/?$"), lambda m, q: page_search_users(q)),
     (re.compile(r"^/recent/?$"), lambda m, q: page_recent(q)),
+    (re.compile(r"^/history/(\d+)/?$"), lambda m, q: page_history(int(m.group(1)))),
     (re.compile(r"^/compose/?$"), lambda m, q: page_compose(q)),
 ]
 STATIC_TYPES = {".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8",
