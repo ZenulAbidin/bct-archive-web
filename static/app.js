@@ -24,7 +24,7 @@
   });
   // 3. Old links such as /threads/123#456 where post 456 is on a later page: ask the server for the right page.
   var m = /^#(?:msg)?(\d+)$/.exec(location.hash), t = /^\/threads\/(\d+)/.exec(location.pathname);
-  if (m && t && !document.getElementById(m[1]) && !/[?&]post=/.test(location.search)) {
+  if (m && t && !document.getElementById(m[1]) && !/[?&](post|page|start)=/.test(location.search)) {
     location.replace('/threads/' + t[1] + '?post=' + m[1] + '#' + m[1]);
   }
 })();

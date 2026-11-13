@@ -135,6 +135,13 @@ def find_post_offset(tid, pid):
     hit = _cache.get(key)
     if hit and hit[0] > time.time():
         return hit[1]
+    try:
+        pos = api("/api/posts/%d/position" % pid)
+        if str(pos.get("thread_id")) == str(tid):
+            _cache[key] = (time.time() + 3600, int(pos["offset"]))
+            return int(pos["offset"])
+    except (NotFound, Upstream, KeyError, ValueError):
+        pass  # API without the position endpoint: walk the topic instead
     first = api("/api/posts", {"thread_id": tid, "limit": 1, "start": 0})
     count = int(first["thread"].get("post_count") or 0)
     lo, hi = 0, max(0, count - 1)
@@ -208,20 +215,42 @@ def excerpt(body, n=320):
     return e(t)
 
 
+def _restyle(style):
+    out = _FSIZE_RE.sub(_scale_size, style)
+    if "--lh: 1.17em" in out:  # art-sized text: its own line box must be tight as well
+        out = re.sub(r"line-height:\s*[\d.]+em", "line-height: 1.17em", out)
+    return out
+
+
 _VOID = {"br", "img", "hr", "wbr"}
-_ART_RE = re.compile("[\u2580-\u259f\u25a0][\u2580-\u259f\u25a0\u00a0 ]*")
+_NO_TEXT = {"table", "thead", "tbody", "tr", "ul", "ol"}
+_FSIZE_RE = re.compile(r"font-size:\s*(\d{1,3}(?:\.\d{1,2})?)(pt|px)", re.I)
+
+
+def _scale_size(m):
+    # Bitcointalk's body text is 13px (about 10pt). Express absolute sizes as multiples of
+    # --pt, which the stylesheet sets to one tenth of the local base size, so [size=10pt]
+    # text matches normal text here and banner art keeps its proportions.
+    n = float(m.group(1)) * (0.75 if m.group(2).lower() == "px" else 1.0)
+    # Block-drawing characters at art sizes must touch the next row; 1.3em leaves hairline gaps.
+    return "font-size: calc(var(--pt) * %g)%s" % (n, "; --lh: 1.17em" if n <= 4 else "; --lh: initial")
 
 
 class _Balancer(HTMLParser):
     """Re-emits already-sanitised HTML with every element properly closed, so one post or
     signature with a missing end tag can never swallow the rest of the page."""
 
-    def __init__(self, art=False):
+    def __init__(self, tight=False):
         super().__init__(convert_charrefs=False)
-        self.out, self.stack, self.art = [], [], art
+        self.out, self.stack, self.tight = [], [], tight
 
     def handle_starttag(self, tag, attrs):
-        a = "".join(' %s="%s"' % (k, html.escape(html.unescape(v or ""), quote=True)) for k, v in attrs)
+        a = "".join(' %s="%s"' % (k, html.escape(_restyle(html.unescape(v or ""))
+                                                 if k == "style" else html.unescape(v or ""), quote=True))
+                    for k, v in attrs)
+        if self.tight and tag == "br":
+            self.out.append('<span class="t"><br></span>')
+            return
         self.out.append("<%s%s>" % (tag, a))
         if tag not in _VOID:
             self.stack.append(tag)
@@ -242,21 +271,24 @@ class _Balancer(HTMLParser):
 
     def handle_data(self, d):
         d = d.replace("<", "&lt;").replace(">", "&gt;")
-        if self.art:  # signature banner art: runs of block-drawing glyphs get their own class
-            d = _ART_RE.sub(lambda m: '<span class="art">%s</span>' % m.group(0), d)
+        if self.tight and not (d.isspace() and self.stack and self.stack[-1] in _NO_TEXT):
+            d = '<span class="t">%s</span>' % d
         self.out.append(d)
 
     def handle_entityref(self, n):
-        self.out.append("&%s;" % n)
+        self.out.append(('<span class="t">&%s;</span>' if self.tight else "&%s;") % n)
 
     def handle_charref(self, n):
-        self.out.append("&#%s;" % n)
+        self.out.append(('<span class="t">&#%s;</span>' if self.tight else "&#%s;") % n)
 
 
-def balanced(fragment, art=False):
+def balanced(fragment, tight=False):
+    """`tight` reproduces how Bitcointalk's pages lay out lines: a line is only as tall as the
+    text actually on it, which is what lets banner art drawn in 2pt characters stack closely.
+    Each run of text gets its own inline box; the stylesheet zeroes the block line height."""
     if not fragment:
         return ""
-    b = _Balancer(art)
+    b = _Balancer(tight)
     try:
         b.feed(fragment)
         b.close()
@@ -278,7 +310,10 @@ def post_body(body, tid, on_page):
         if t == str(tid) and p in on_page:
             return 'href="#%s"' % p
         return 'href="/threads/%s?post=%s#%s"' % (t, p, p)
-    b = _LINK_RE.sub(fix, balanced(body))
+    sized = "font-size" in (body or "")
+    b = _LINK_RE.sub(fix, balanced(body, tight=sized))
+    if sized:
+        b = '<div class="tight">%s</div>' % b
     b = b.replace("<img ", '<img loading="lazy" decoding="async" referrerpolicy="no-referrer" ')
     return b
 
@@ -589,7 +624,7 @@ def page_thread(tid, q):
             stats.append("<li>%s</li>" % tr)
         sig = ""
         if u.get("signature"):
-            sig = '<div class="sig" aria-label="Signature">%s</div>' % balanced(u["signature"], art=True)
+            sig = '<div class="sig" aria-label="Signature">%s</div>' % balanced(u["signature"], tight=True)
         last = ' <span id="last"></span>' if i == len(posts) - 1 else ""
         arts.append(
             '<article class="entry" id="%s" aria-label="Post %s by %s">%s'
@@ -656,7 +691,7 @@ def page_profile(name, q, sub=""):
         ext(u.get("profile_on_bitcointalk") or "%s?action=profile;u=%s" % (BCT, u.get("id")), "Profile on bitcointalk.org", "btn ghost"),
         ext(u.get("merit_history_url") or "#", "Merit history", "btn ghost"),
         ext("https://bpip.org/Profile?p=%s" % urllib.parse.quote(uname), "Trust feedback (BPIP)", "btn ghost")])
-    sig = '<div class="sig full" aria-label="Signature">%s</div>' % balanced(u["signature"], art=True) if u.get("signature") else ""
+    sig = '<div class="sig full" aria-label="Signature">%s</div>' % balanced(u["signature"], tight=True) if u.get("signature") else ""
     pg = pager(base, page, pages, "Post history pages")
     body = ('%s<section class="panel profile"><div class="p-top">%s<div><h1>%s</h1><dl class="facts">%s</dl></div></div>'
             '<p class="p-links">%s</p>%s</section><div class="head"><h2>Posts by %s</h2></div>%s<section class="panel">%s</section>%s'
