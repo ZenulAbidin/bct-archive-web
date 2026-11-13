@@ -414,11 +414,16 @@ def user_link(name, cls=""):
 
 
 def trust_html(stats, label="Trust: "):
-    if not stats or not (stats.get("pos") or stats.get("neg")):
+    """Trust score the way Bitcointalk shows it: positive / neutral / negative feedback counted by
+    the DefaultTrust network (weekly snapshot)."""
+    f = (stats or {}).get("feedback")
+    if not f:
         return ""
-    neg, pos = int(stats.get("neg") or 0), int(stats.get("pos") or 0)
-    return ('<span class="trust" title="DefaultTrust network: included by %d members, excluded by %d">'
-            '%s<b class="pos">+%d</b> / <b class="neg">−%d</b></span>' % (pos, neg, label, pos, neg))
+    pos, neu, neg = int(f.get("positive") or 0), int(f.get("neutral") or 0), int(f.get("negative") or 0)
+    return ('<span class="trust" title="Trust feedback counted by the DefaultTrust network: %d positive, %d neutral, %d negative">'
+            '%s<b class="%s">+%d</b> / =%d / <b class="%s">-%d</b>%s</span>'
+            % (pos, neu, neg, label, "pos" if pos else "", pos, neu, "neg" if neg else "", neg,
+               ' <b class="neg" title="Warning: trade with extreme caution">!!!</b>' if f.get("warning") else ""))
 
 
 def avatar_html(url, name, size):
@@ -961,7 +966,10 @@ def page_profile(name, q, sub=""):
     elif u.get("created_at"):
         facts.append(("First archived post", when(u["created_at"], short=True)))
     tr = trust_html(u.get("stats"), "")
-    facts.append(("DefaultTrust", tr or '<span class="muted">not in the network</span>'))
+    facts.append(("Trust", tr or '<span class="muted">no feedback counted by DefaultTrust</span>'))
+    st_ = u.get("stats") or {}
+    facts.append(("Trust lists", "%sincluded by %s member%s, excluded by %s" % (
+        "DT%d member; " % st_["dt"] if st_.get("dt") else "", num(st_.get("pos") or 0), "" if st_.get("pos") == 1 else "s", num(st_.get("neg") or 0))))
     dl = "".join('<tr><th scope="row">%s:</th><td>%s</td></tr>' % f for f in facts)
     actions = " ".join([
         '<a class="btn" href="%s/stats">Statistics</a>' % base,
