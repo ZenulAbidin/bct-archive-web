@@ -24,7 +24,7 @@
   function render(src) {
     var codes = [];
     var s = esc(src).replace(/\[code\]([\s\S]*?)\[\/code\]/gi, function (_, c) {
-      codes.push(c); return '\u0000' + (codes.length - 1) + '\u0000';
+      codes.push(c.replace(/^\n/, '').replace(/\n$/, '')); return '\u0000' + (codes.length - 1) + '\u0000';
     });
     var simple = { b: 'b', i: 'i', u: 'u', s: 'del', tt: 'tt', sub: 'sub', sup: 'sup', pre: 'pre' };
     var prev;
@@ -44,13 +44,19 @@
       });
       s = s.replace(/\[quote(?:\s+author=([^\]]*?))?(?:\s+link=[^\]\s]*)?(?:\s+date=(\d+))?\]([\s\S]*?)\[\/quote\]/gi, function (_, a, d, c) {
         var head = a ? 'Quote from: ' + a + (d ? ' on ' + new Date(+d * 1000).toLocaleString() : '') : 'Quote';
-        return '<div class="quoteheader">' + head + '</div><div class="quote">' + c.replace(/^\n+|\n+$/g, '') + '</div>';
+        return '<div class="quoteheader">' + head + '</div><div class="quote">' + c + '</div>';
       });
       s = s.replace(/\[list\]([\s\S]*?)\[\/list\]/gi, function (_, c) {
         return '<ul>' + c.replace(/\[li\]([\s\S]*?)\[\/li\]/gi, '<li>$1</li>').replace(/\[\*\]([^\[\n]*)/g, '<li>$1</li>') + '</ul>';
       });
     } while (s !== prev);
-    s = s.replace(/\[hr\]/gi, '<hr>').replace(/\n/g, '<br>');
+    s = s.replace(/\[hr\]/gi, '<hr>');
+    // Like the forum's own renderer: one line break right after a block starts or ends is not shown
+    // (quote, code, list, centred text, horizontal line), and breaks between list items are dropped.
+    s = s.replace(/(<div class="quote">|<div align="(?:center|left|right)">|<ul>|<pre>)\n/g, '$1')
+         .replace(/(<\/div>|<\/ul>|<\/pre>|<hr>|\u0000\d+\u0000)\n/g, '$1')
+         .replace(/\n*(<\/?li>|<\/ul>)\n*/g, '$1').replace(/<ul>\n+/g, '<ul>');
+    s = s.replace(/\n/g, '<br>');
     return s.replace(/\u0000(\d+)\u0000/g, function (_, i) { return '<div class="codeheader">Code:</div><div class="code">' + codes[+i] + '</div>'; });
   }
   function update() { preview.innerHTML = render(msg.value); save(); }
