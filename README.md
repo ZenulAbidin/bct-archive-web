@@ -17,6 +17,8 @@ Epochtalk Vue client used) and keeps that client's public URLs working.
 | `/threads/<id>#<post id>` | Link to one post |
 | `/profile/<name or user id>` | Member profile and post history (`/posts`, `/trust` also answer) |
 | `/history/<post id>` | Earlier versions of a post, from the BitList Archive (needs `/api/posts/<id>/history` on the API) |
+| `/stats` | Forum statistics: merit leaders, most merited posts, most active members, boards and topics |
+| `/profile/<name>/stats` | Member statistics: posts by year, month, board, hour and weekday; merit received and sent |
 | `/search/posts?search=...` | Post search |
 | `/search/users?search=...` | Member search |
 | `/index.php?topic=T.msgP`, `?topic=T.N`, `?board=B.N`, `?action=profile;u=ID` | Bitcointalk-style links, redirected |

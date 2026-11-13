@@ -191,3 +191,4 @@ textarea#msg { width: 100%; min-height: 220px; font: 13px/1.4 var(--mono); resiz
 }
 @media print { .hd, .tabs, .ft, .bar, .acts, .ulinks { display: none; } body { background: #fff; } }
 .poster .neg { color: var(--neg); }
+.stats-grid { gap: 14px 28px; align-items: start; } .stats-grid .pollt td:first-child { max-width: 300px; overflow-wrap: anywhere; }

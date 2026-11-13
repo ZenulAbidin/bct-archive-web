@@ -526,7 +526,7 @@ def layout(title, body, q="", canonical="", noindex=False, active="", scripts=()
        '<meta name="robots" content="noindex">\n' if noindex else "",
        ASSET_V, ASSET_V, ASSET_V, extra, e(SITE), TAG_HTML, e(q),
        tab("/", "Home", "boards"), tab("/search/posts", "Search", "search"), tab("/search/users", "Members", "members"),
-       tab("/recent", "Recent posts", "recent"),
+       tab("/recent", "Recent posts", "recent") + tab("/stats", "Stats", "stats"),
        act(bct("action=login"), "Login"), act(bct("action=register"), "Register"),
        body, e(SITE), e(SITE_TAG), src)
 
@@ -918,6 +918,7 @@ def page_profile(name, q, sub=""):
     facts.append(("DefaultTrust", tr or '<span class="muted">not in the network</span>'))
     dl = "".join('<tr><th scope="row">%s:</th><td>%s</td></tr>' % f for f in facts)
     actions = " ".join([
+        '<a class="btn" href="%s/stats">Statistics</a>' % base,
         act(bct("action=pm;sa=send;u=%s" % uid), "Send PM", "", "btn"),
         act(bct("action=trust;u=%s" % uid), "Trust feedback", "View or leave feedback", "btn"),
         act(bct("action=merit;u=%s" % uid), "Merit", "Merit sent and received", "btn"),
@@ -955,6 +956,98 @@ def page_profile(name, q, sub=""):
                actions, "".join(extra), pg, e(uname),
                post_list(pd.get("posts") or [], show_author=False) if pd.get("posts") else '<p class="pad muted">No archived posts.</p>', pg))
     return layout(uname, body, active="members", canonical=base if page == 1 else "%s?page=%d" % (base, page))
+
+
+# --------------------------------------------------------------------------- statistics
+def bars(caption, rows, unit=""):
+    """rows: (label html, number). A small table with proportional bars; no script needed."""
+    rows = [r for r in rows if r[1] is not None]
+    if not rows:
+        return ""
+    top = max(r[1] for r in rows) or 1
+    return ('<table class="pollt"><caption>%s</caption><tbody>%s</tbody></table>'
+            % (e(caption), "".join('<tr><td>%s</td><td class="pb"><span style="width:%.0f%%"></span></td><td class="n">%s%s</td></tr>'
+                                   % (label, 100.0 * v / top, num(v), unit) for label, v in rows)))
+
+
+def merit_post_rows(posts):
+    return [('<a href="/threads/%s?post=%s#%s">%s</a>%s' % (p.get("topic_id") or 0, p["post_id"], p["post_id"],
+                                                             e(clean_title(p.get("title")) or "Post %s" % p["post_id"]),
+                                                             " by %s" % user_link(p["author"]) if p.get("author") else ""), p["merit"])
+            for p in posts if p.get("topic_id")]
+
+
+_DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+
+def page_user_stats(name):
+    quoted = urllib.parse.quote(name, safe="")
+    u = api("/api/users/%s" % quoted, ttl=60)
+    uname = u.get("username") or name
+    base = "/profile/%s" % urllib.parse.quote(uname, safe="")
+    st = api("/api/users/%s/stats" % quoted, ttl=600)
+    m = st.get("merit") or {}
+    facts = [("Posts in archive", num(u.get("post_count"))), ("Topics posted in", num(st.get("topics"))),
+             ("First archived post", when(st.get("first"), short=True)), ("Last archived post", when(st.get("last"), short=True))]
+    if m:
+        facts += [("Merit received", "%s in %s transactions from %s members" % (num(m["received"]), num(m["received_tx"]), num(m["distinct_senders"]))),
+                  ("Merit sent", "%s in %s transactions to %s members" % (num(m["sent"]), num(m["sent_tx"]), num(m["distinct_recipients"])))]
+    dl = "".join('<tr><th scope="row">%s:</th><td>%s</td></tr>' % f for f in facts)
+    blocks = [
+        bars("Posts per year", [(y["year"], y["posts"]) for y in st.get("years") or []]),
+        bars("Posts per month, last 24 months", [(x["month"], x["posts"]) for x in st.get("months") or []]),
+        bars("Most active boards", [('<a href="/boards/%s">%s</a>' % (b["id"], e(b["name"])), b["posts"]) for b in st.get("boards") or []]),
+        bars("Topics with the most posts by %s" % uname, [('<a href="/threads/%s">%s</a>' % (t["id"], e(clean_title(t.get("title")) or "Topic %s" % t["id"])), t["posts"])
+                                                          for t in st.get("top_topics") or []]),
+        bars("Posts by hour of day (UTC)", [("%02d:00" % h, v) for h, v in enumerate(st.get("hours") or [])]),
+        bars("Posts by day of week (UTC)", list(zip(_DAYS, st.get("weekdays") or []))),
+    ]
+    if m:
+        blocks += [
+            bars("Merit received per year", [(y["year"], y["received"]) for y in m.get("years") or []]),
+            bars("Merit sent per year", [(y["year"], y["sent"]) for y in m.get("years") or []]),
+            bars("Merit received from", [(user_link(x["username"]), x["merit"]) for x in m.get("top_senders") or []]),
+            bars("Merit sent to", [(user_link(x["username"]), x["merit"]) for x in m.get("top_recipients") or []]),
+            bars("Most merited posts", merit_post_rows(m.get("top_posts") or [])),
+        ]
+    body = ('%s<div class="tb"><h1 class="catbg">Statistics - %s</h1><div class="summary"><table class="kv"><tbody>%s</tbody></table></div>'
+            '<div class="two stats-grid">%s</div>'
+            '<p class="pad small muted">Posting figures are counted from the posts in this archive. Merit figures come from the public merit data published by LoyceV.</p></div>'
+            % (crumbs_html([("Members", "/search/users"), (uname, base), ("Statistics", "")]), e(uname), dl, "".join(b for b in blocks if b)))
+    return layout("Statistics - %s" % uname, body, active="members", canonical=base + "/stats")
+
+
+def page_forum_stats():
+    st = api("/api/stats", ttl=600)
+    m = st.get("merit") or {}
+    facts = [("Posts in the last 30 days", num(st.get("posts_30d")))]
+    if m:
+        facts += [("Merit sent, all time", "%s in %s transactions" % (num(m["total"]), num(m["transactions"]))),
+                  ("Merit sent, last 30 days", "%s in %s transactions" % (num(m["total_30d"]), num(m["transactions_30d"]))),
+                  ("Members who received merit", num(m["recipients"])), ("Members who sent merit", num(m["senders"]))]
+    dl = "".join('<tr><th scope="row">%s:</th><td>%s</td></tr>' % f for f in facts)
+    def users(key, field):
+        return [(user_link(x["username"]), x[field]) for x in (m.get(key) if field == "merit" else st.get(key)) or []]
+    blocks = [
+        bars("Most merit received, last 30 days", users("receivers_30d", "merit")) if m else "",
+        bars("Most merit sent, last 30 days", users("senders_30d", "merit")) if m else "",
+        bars("Most merited posts, last 30 days", merit_post_rows(m.get("posts_30d") or [])) if m else "",
+        bars("Most active members, last 30 days", users("posters_30d", "posts")),
+        bars("Most active boards, last 30 days", [('<a href="/boards/%s">%s</a>' % (b["id"], e(b["name"])), b["posts"]) for b in st.get("boards_30d") or []]),
+        bars("Most active topics, last 30 days", [('<a href="/threads/%s">%s</a>' % (t["id"], e(clean_title(t.get("title")) or "Topic %s" % t["id"])), t["posts"])
+                                                  for t in st.get("topics_30d") or []]),
+        bars("Most merit received, all time", users("receivers_all", "merit")) if m else "",
+        bars("Most merit sent, all time", users("senders_all", "merit")) if m else "",
+        bars("Most merited posts, all time", merit_post_rows(m.get("posts_all") or [])) if m else "",
+        bars("Merit sent per year", [(y["year"], y["merit"]) for y in m.get("years") or []]) if m else "",
+        bars("Posts per month, last 24 months", [(x["month"], x["posts"]) for x in st.get("months") or []]),
+    ]
+    body = ('%s<div class="tb"><h1 class="catbg">Forum statistics</h1><div class="summary"><table class="kv"><tbody>%s</tbody></table></div>'
+            '<div class="two stats-grid">%s</div>'
+            '<p class="pad small muted">Posting figures are counted from the posts in this archive. Merit figures come from the public merit data published by LoyceV. '
+            'Open a member\'s profile and choose Statistics for their own figures.</p></div>'
+            % (crumbs_html([("Statistics", "/stats")]), dl, "".join(b for b in blocks if b)))
+    return layout("Forum statistics", body, active="stats", canonical="/stats")
 
 
 # --------------------------------------------------------------------------- search
@@ -1102,6 +1195,8 @@ ACCOUNT_ONLY = re.compile(r"^/(messages|settings|patrol|mentions|watchlist|login
 ROUTES = [
     (re.compile(r"^/boards/(\d+)/?$"), lambda m, q: page_board(int(m.group(1)), q)),
     (re.compile(r"^/threads/(\d+)(?:/[^/]*)?/?$"), lambda m, q: page_thread(int(m.group(1)), q)),
+    (re.compile(r"^/profile/([^/]+)/stats/?$"), lambda m, q: page_user_stats(urllib.parse.unquote(m.group(1)))),
+    (re.compile(r"^/stats/?$"), lambda m, q: page_forum_stats()),
     (re.compile(r"^/profile/([^/]+)(?:/(posts|trust))?/?$"),
      lambda m, q: page_profile(urllib.parse.unquote(m.group(1)), q, m.group(2) or "")),
     (re.compile(r"^/search/posts/?$"), lambda m, q: page_search_posts(q)),
