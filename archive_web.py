@@ -1160,16 +1160,15 @@ def page_user_trust(name):
         if not rows:
             return '<div class="tb"><h2 class="titlebg">%s (0)</h2><p class="pad muted">None.</p></div>' % heading
         body = "".join(
-            '<tr><td>%s</td><td class="nw">%s</td><td class="nw"><b class="%s">%s</b></td><td class="nw">%s</td><td>%s</td><td class="cm">%s</td></tr>'
+            '<tr><td>%s</td><td class="nw">%s</td><td class="nw"><b class="%s">%s</b></td><td>%s</td><td class="cm">%s</td></tr>'
             % ('<b title="DT%d member">%s</b>' % (r["dt"], user_link(r["username"])) if r.get("dt") else user_link(r["username"]),
                when(r.get("date"), short=True) or e(r.get("date") or ""),
                {"positive": "pos", "negative": "neg"}.get(r.get("rating"), ""), e((r.get("rating") or "").capitalize()),
-               e(r.get("risked") or ""),
                '<a href="%s" rel="noopener nofollow ugc">Reference</a>' % e(r["reference"]) if str(r.get("reference") or "").startswith(("http://", "https://")) else "",
                e(r.get("comment") or ""))
             for r in rows)
         return ('<div class="tb"><h2 class="titlebg">%s (%d)</h2><div class="scroll"><table class="grid fb"><thead><tr class="titlebg">'
-                '<th scope="col">%s</th><th scope="col">Date</th><th scope="col">Rating</th><th scope="col">Risked BTC</th>'
+                '<th scope="col">%s</th><th scope="col">Date</th><th scope="col">Rating</th>'
                 '<th scope="col">Reference</th><th scope="col">Comments</th></tr></thead><tbody>%s</tbody></table></div></div>'
                 % (heading, len(rows), col, body))
     tr = trust_html(u.get("stats"), "")
