@@ -1,7 +1,7 @@
 # bct-archive-web
 
 A small, server-rendered frontend for a read-only Bitcointalk archive
-(used by forum.talksearch.io). Plain HTML, one stylesheet, and about 1.6 KB of
+(used by forum.talksearch.io). Plain HTML, one stylesheet, and a few KB of
 optional JavaScript. No framework, no build step, no web fonts, no trackers.
 
 It renders pages from the archive's JSON API (the `/api/*` contract the
@@ -46,6 +46,33 @@ Then open http://127.0.0.1:18190/.
 Put a reverse proxy (nginx) in front for TLS, gzip and rate limiting. Files under
 `/static/` are served with a one-year cache lifetime and a version query string.
 
+## Optional settings
+
+| Variable | Meaning |
+| --- | --- |
+| `TALKSEARCH_API` | Base URL of a TalkSearch search API. Enables the ranked "Advanced search" form |
+| `BOARD_DESCRIPTIONS` | JSON file `{"<board id>": "description"}` shown under board names |
+| `IMG_CACHE` | Directory for the image proxy's disk cache (strongly recommended) |
+| `IMG_SECRET` | Secret that signs image addresses. Set it, or links change at every restart |
+
+## Image proxy
+
+Post and signature images are never loaded from third-party hosts by the reader's browser.
+`imgproxy.py` undoes Bitcointalk's own image proxy links, fetches the original once, checks
+it and serves it from `/img/...`. It only fetches addresses this server signed, refuses
+private and loopback hosts (the connection is pinned to the checked address), follows at
+most 3 redirects, stops at 8 MB or 10 s, and accepts only real PNG, JPEG, GIF or WebP data.
+Nothing is logged.
+
+## Actions and the composer
+
+Reply, Quote and New topic open a BBCode composer (`/compose`) with a toolbar and a live
+preview. The draft stays in the browser's local storage and nothing typed there is sent to
+this server. "Copy and open Bitcointalk" copies the text and opens the real form on
+bitcointalk.org in a popup window. All other actions (PM, merit, report, trust, notify,
+print, login) are plain links that open the matching bitcointalk.org page in that popup.
+This site has no accounts and never asks for Bitcointalk credentials.
+
 ## Build
 
 There is no build step. `static/style.css` and `static/app.js` are served as written.
@@ -56,7 +83,8 @@ There is no build step. `static/style.css` and `static/app.js` are served as wri
   column, SMF-style quote and code blocks, signatures under posts.
 - Works without JavaScript. The script only localises dates, replaces dead images
   with a note, and repairs old post links that point at the wrong page.
-- Light and dark themes follow the reader's system setting. System fonts only.
+- Dense table layout in the style of Simple Machines Forum, in Bitcoin orange. Light theme by
+  default, dark on request (button, or `?theme=dark`). System fonts only.
 - Accessibility: skip link, landmarks, table headers, visible focus, 4.5:1 text
   contrast, 44 px touch targets on phones, no motion.
 - Post and signature HTML is sanitised by the API. This frontend additionally
