@@ -160,7 +160,7 @@ ul.plain { list-style: none; margin: 0; padding: 0; } ul.plain li { padding: 1px
 .results tr:nth-child(even) td { background: var(--win); }
 .members .ic { width: 40px; } .members .avatar { display: block; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 2px; margin: 6px 0 4px; }
-.toolbar button { padding: 0 8px; font-weight: normal; } .toolbar .tb-b { font-weight: bold; } .tb-i { font-style: italic; } .tb-u { text-decoration: underline; } .tb-s { text-decoration: line-through; }
+.toolbar button { width: 30px; height: 28px; padding: 0; justify-content: center; color: var(--fg); } .toolbar button svg { display: block; }
 textarea#msg { width: 100%; min-height: 220px; font: 13px/1.4 var(--mono); resize: vertical; }
 .preview { min-height: 60px; padding: 8px 10px; border: 1px solid var(--line); border-top: 0; background: var(--win2); }
 #status { margin-left: 6px; color: var(--pos); font-weight: bold; }

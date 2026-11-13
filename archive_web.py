@@ -813,6 +813,28 @@ def page_history(pid):
 
 
 # --------------------------------------------------------------------------- composer
+# Toolbar icons: original 16x16 line drawings (MIT, like the rest of this file).
+_TOOL_ICON = ('<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" '
+              'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">%s</svg>')
+TOOL_ICONS = {
+    "b": '<path d="M4.5 2.5h4a2.7 2.7 0 0 1 0 5.4h-4zM4.5 7.9h4.6a2.8 2.8 0 0 1 0 5.6H4.5z" stroke-width="2.2"/>',
+    "i": '<path d="M7 2.5h5M4 13.5h5M9.8 2.5 6.2 13.5"/>',
+    "u": '<path d="M4.5 2.5v5a3.5 3.5 0 0 0 7 0v-5M3.5 14h9"/>',
+    "s": '<path d="M11.5 4.6C11 3.3 9.700 2.5 8 2.5c-2 0-3.300 1-3.300 2.500 0 1.300.9 2 3.300 2.600M4.300 11c.4 1.500 1.800 2.500 3.700 2.500 2.100 0 3.500-1 3.500-2.600 0-.7-.2-1.200-.7-1.700M2.500 8h11"/>',
+    "quote": '<path d="M2.500 9.500c0-3 1.200-5 3.500-6v2c-1 .6-1.500 1.400-1.500 2.500H6.500v4h-4zM9.500 9.500c0-3 1.200-5 3.500-6v2c-1 .6-1.500 1.400-1.500 2.500h2v4h-4z" fill="currentColor" stroke="none"/>',
+    "code": '<path d="M5.500 4 1.500 8l4 4M10.500 4l4 4-4 4"/>',
+    "url": '<path d="M6.700 9.300a3 3 0 0 0 4.200 0l2.300-2.300a3 3 0 0 0-4.200-4.200L8 3.800M9.300 6.700a3 3 0 0 0-4.200 0L2.800 9a3 3 0 0 0 4.200 4.200L8 12.200"/>',
+    "img": '<rect x="1.500" y="2.500" width="13" height="11" rx="1"/><circle cx="5" cy="6" r="1.200"/><path d="m2 12.500 3.500-3.500 2.500 2.500 2.500-3 3.500 4"/>',
+    "size": '<path d="M1.500 5V3.500h8V5M5.500 3.500v9M4 12.500h3M9.500 9V8h5v1M12 8v4.500M11 12.500h2"/>',
+    "color": '<path d="M4 11.500 8 2.500l4 9M5.400 8.500h5.200"/><path d="M2.500 14.500h11" stroke="#e07d08" stroke-width="2.4"/>',
+    "list": '<path d="M6 4h8M6 8h8M6 12h8"/><circle cx="2.700" cy="4" r=".9" fill="currentColor"/><circle cx="2.700" cy="8" r=".9" fill="currentColor"/><circle cx="2.700" cy="12" r=".9" fill="currentColor"/>',
+    "center": '<path d="M2 3.500h12M4.500 6.500h7M2 9.500h12M4.500 12.500h7"/>',
+    "tt": '<path d="m2.500 4.500 3.500 3.500-3.500 3.500M8.500 12h5.500"/>',
+    "hr": '<path d="M1.500 8h13" stroke-width="2"/><path d="M4 4h8M4 12h8" stroke-width="1" opacity=".45"/>',
+}
+
+
+
 def page_compose(q):
     """Write a reply, quote or new topic here; it is then pasted into the real form on
     bitcointalk.org. Nothing typed on this page is sent to this server."""
@@ -845,12 +867,11 @@ def page_compose(q):
                    '<button type="button" class="btn" data-copy="subject">Copy subject</button></span></p>')
     else:
         raise NotFound()
-    tools = "".join('<button type="button" data-tag="%s" title="%s"%s>%s</button>' % (t, e(tip), ' class="%s"' % c if c else "", lab)
-                    for t, lab, tip, c in (
-        ("b", "B", "Bold", "tb-b"), ("i", "I", "Italic", "tb-i"), ("u", "U", "Underline", "tb-u"), ("s", "S", "Strikethrough", "tb-s"),
-        ("quote", "Quote", "Quote", ""), ("code", "Code", "Code", ""), ("url", "URL", "Link", ""), ("img", "Img", "Image", ""),
-        ("size", "Size", "Text size", ""), ("color", "Color", "Text colour", ""), ("list", "List", "List", ""),
-        ("center", "Center", "Centre", ""), ("tt", "TT", "Teletype", ""), ("hr", "HR", "Horizontal rule", "")))
+    tools = "".join('<button type="button" data-tag="%s" title="%s" aria-label="%s">%s</button>' % (t, e(tip), e(tip), _TOOL_ICON % TOOL_ICONS[t])
+                    for t, tip in (
+        ("b", "Bold"), ("i", "Italic"), ("u", "Underline"), ("s", "Strikethrough"), ("quote", "Quote"), ("code", "Code"),
+        ("url", "Link"), ("img", "Image"), ("size", "Text size"), ("color", "Text colour"), ("list", "List"),
+        ("center", "Centre"), ("tt", "Monospace"), ("hr", "Horizontal line")))
     body = ('%s<div class="tb"><h1 class="catbg">%s</h1><div class="pad composer" id="composer" data-key="%s" data-target="%s">'
             '<noscript><p class="warn">The composer needs JavaScript. You can also %s.</p></noscript>'
             '%s<div class="toolbar" role="toolbar" aria-label="Formatting">%s</div>'
