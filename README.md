@@ -42,6 +42,7 @@ Then open http://127.0.0.1:18190/.
 | `PORT` | `18190` | Listen port |
 | `SITE_NAME` | `Bitcointalk Forum` | Name in the header and titles |
 | `SITE_TAGLINE` | `by TalkSearch` | Small text after the name |
+| `SITE_TAGLINE_URL` | `https://talksearch.io` | Where the name after "by " in the tagline links |
 | `SOURCE_URL` | empty | If set, a "Source code" link in the footer |
 
 Put a reverse proxy (nginx) in front for TLS, gzip and rate limiting. Files under

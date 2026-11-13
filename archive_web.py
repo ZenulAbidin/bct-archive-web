@@ -38,6 +38,7 @@ BIND = os.environ.get("BIND", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "18190"))
 SITE = os.environ.get("SITE_NAME", "Bitcointalk Forum")
 SITE_TAG = os.environ.get("SITE_TAGLINE", "by TalkSearch")
+SITE_TAG_URL = os.environ.get("SITE_TAGLINE_URL", "https://talksearch.io")  # the name after "by " links here
 SOURCE_URL = os.environ.get("SOURCE_URL", "")
 TALKSEARCH_API = os.environ.get("TALKSEARCH_API", "").rstrip("/")   # optional: ranked advanced search
 BOARD_DESCRIPTIONS = os.environ.get("BOARD_DESCRIPTIONS", "")        # optional JSON file {board id: text}
@@ -469,6 +470,15 @@ def crumbs_html(items):
     return '<nav class="crumbs" aria-label="Breadcrumb">%s</nav>' % ' <span aria-hidden="true">&gt;</span> '.join(parts)
 
 
+def _tag_html():
+    if SITE_TAG_URL and SITE_TAG.startswith("by ") and len(SITE_TAG) > 3:
+        return 'by <a href="%s" rel="noopener">%s</a>' % (e(SITE_TAG_URL), e(SITE_TAG[3:]))
+    return e(SITE_TAG)
+
+
+TAG_HTML = _tag_html()
+
+
 def layout(title, body, q="", canonical="", noindex=False, active="", scripts=()):
     full = "%s - %s" % (title, SITE) if title else "%s %s" % (SITE, SITE_TAG)
 
@@ -492,7 +502,7 @@ def layout(title, body, q="", canonical="", noindex=False, active="", scripts=()
 <a class="skip" href="#main">Skip to content</a>
 <div class="page">
 <header class="hd">
-<a class="brand" href="/">%s <span>%s</span></a>
+<div class="brand"><a href="/">%s</a> <span>%s</span></div>
 <form class="q" action="/search/posts" method="get" role="search">
 <label class="sr" for="q">Search posts</label>
 <input id="q" name="search" type="search" placeholder="Search posts" value="%s" autocomplete="off">
@@ -514,7 +524,7 @@ def layout(title, body, q="", canonical="", noindex=False, active="", scripts=()
 """ % (e(full),
        '<link rel="canonical" href="%s">\n' % e(canonical) if canonical else "",
        '<meta name="robots" content="noindex">\n' if noindex else "",
-       ASSET_V, ASSET_V, ASSET_V, extra, e(SITE), e(SITE_TAG), e(q),
+       ASSET_V, ASSET_V, ASSET_V, extra, e(SITE), TAG_HTML, e(q),
        tab("/", "Home", "boards"), tab("/search/posts", "Search", "search"), tab("/search/users", "Members", "members"),
        tab("/recent", "Recent posts", "recent"),
        act(bct("action=login"), "Login"), act(bct("action=register"), "Register"),

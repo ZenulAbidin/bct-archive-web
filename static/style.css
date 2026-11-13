@@ -38,9 +38,9 @@ p { margin: 6px 0; }
 /* header: orange title bar, tab strip, breadcrumbs */
 .hd { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 8px 10px; color: var(--on-brand);
   background: linear-gradient(var(--brand), var(--brand-2)); border: 1px solid var(--cat-line); border-bottom: 0; }
-.brand { color: var(--on-brand); font-size: 17px; font-weight: bold; }
-.brand span { font-size: 11px; font-weight: normal; }
-.brand:hover { color: var(--on-brand); }
+.brand, .brand a { color: var(--on-brand); font-size: 17px; font-weight: bold; }
+.brand span, .brand span a { font-size: 11px; font-weight: normal; } .brand span a { text-decoration: underline; }
+.brand a:hover { color: var(--on-brand); }
 .q { margin-left: auto; display: flex; gap: 4px; min-width: 0; flex: 0 1 300px; }
 .q input { flex: 1; min-width: 0; height: 26px; padding: 0 6px; font: inherit; border: 1px solid var(--cat-line); background: #fff; color: #1f1a14; }
 .q button, .btn, .jump button, .toolbar button { height: 26px; padding: 0 10px; font: bold 11px var(--font); cursor: pointer; border: 1px solid var(--cat-line);
