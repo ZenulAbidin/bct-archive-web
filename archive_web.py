@@ -524,6 +524,7 @@ def layout(title, body, q="", canonical="", noindex=False, active="", scripts=()
 <footer class="ft">
 <p>%s %s is an unofficial, read-only archive of public Bitcointalk posts and is not affiliated with bitcointalk.org. Posts belong to their authors.</p>
 <p>Credits: public posts and profiles from <a href="https://bitcointalk.org" rel="noopener">bitcointalk.org</a>; trust lists and merit totals from <a href="https://loyce.club" rel="noopener">LoyceV</a>; post edit history from the <a href="https://bitlist.co" rel="noopener">BitList Archive</a>; search by <a href="https://talksearch.io" rel="noopener">TalkSearch</a>.</p>
+<p>Made by <a href="https://bitcointalk.org/index.php?action=profile;u=2739424" rel="noopener">NotATether</a></p>
 <p><a href="/">Home</a> | <a href="/search/posts">Search</a> | <a href="/search/users">Members</a>%s</p>
 </footer>
 </div>
