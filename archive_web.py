@@ -740,20 +740,20 @@ def page_thread(tid, q):
             merit = '<div class="merited">Merited: <b>+%s</b> by %s member%s</div>' % (
                 num(p["merit"].get("total")), num(p["merit"].get("senders")), "" if p["merit"].get("senders") == 1 else "s")
         sig = '<div class="sig" aria-label="Signature">%s</div>' % balanced(u["signature"], tight=True) if u.get("signature") else ""
+        tools = '<a href="/compose?topic=%d&amp;quote=%s">Quote</a> %s' % (
+            tid, pid, act(bct("action=merit;msg=%s" % pid), "Merit", "Send merit for this post"))
         acts = "".join([
-            '<a href="/compose?topic=%d&amp;quote=%s">Quote</a>' % (tid, pid),
-            act(bct("action=merit;msg=%s" % pid), "Send merit"),
             act(bct("action=reporttm;topic=%d.0;msg=%s" % (tid, pid)), "Report", "Report this post to the moderators"),
             '<a href="/history/%s" rel="nofollow" title="Earlier versions of this post, kept by the BitList Archive">Edit history</a>' % pid,
             act(bct("topic=%d.msg%s#msg%s" % (tid, pid, pid)), "Original", "This post on bitcointalk.org")])
         rows.append(
             '<tr class="post %s" id="%s"><td class="poster">%s<b class="pname">%s</b>%s%s%s%s</td>'
             '<td class="msg"><div class="phead">%s<div class="pt"><a class="subject" href="%s#%s">%s%s</a>'
-            '<div class="small">%s</div>%s</div><a class="pnum" href="%s#%s" title="Link to this post">#%s</a></div>'
+            '<div class="small">%s</div>%s</div><span class="ptools">%s</span><a class="pnum" href="%s#%s" title="Link to this post">#%s</a></div>'
             '<div class="content">%s</div>%s<div class="acts">%s</div></td></tr>'
             % ("alt" if i % 2 else "", pid, '<span id="last"></span>' if i == len(posts) - 1 else "",
                user_link(name), "".join(info), av, '<div>%s</div>' % tr if tr else "", ulinks,
-               ICON_POST, here, pid, "" if p.get("position") == 1 else "Re: ", e(title), when(p.get("created_at")), merit,
+               ICON_POST, here, pid, "" if p.get("position") == 1 else "Re: ", e(title), when(p.get("created_at")), merit, tools,
                here, pid, num(p.get("position")), post_body(p.get("body_html"), tid, on_page), sig, acts))
     pg = pager(base, page, pages, "Topic pages")
     buttons = '<span class="btns"><a class="btn" href="/compose?topic=%d">Reply</a>%s%s</span>' % (

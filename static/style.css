@@ -116,6 +116,7 @@ ul.plain { list-style: none; margin: 0; padding: 0; } ul.plain li { padding: 1px
 .pt { flex: 1; min-width: 0; }
 .subject { font-weight: bold; }
 .pnum { font-size: 11px; white-space: nowrap; }
+.ptools { display: flex; gap: 10px; font-size: 11px; font-weight: bold; white-space: nowrap; }
 .merited { font-size: 11px; color: var(--pos); }
 .content { padding: 8px 0 4px; --pt: 1.3px; overflow-x: auto; }
 .content img, .sig img { max-width: 100%; height: auto; }
