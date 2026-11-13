@@ -759,23 +759,43 @@ def page_board(bid, q):
 
 
 # --------------------------------------------------------------------------- topics
-def poll_html(poll):
+def poll_html(poll, tid=0):
+    """The topic's poll, read-only: question, options with votes and bars, total voters and its state.
+    Voting happens on bitcointalk.org."""
     if not poll or not poll.get("answers"):
         return ""
-    total = sum(int(a.get("votes") or 0) for a in poll["answers"])
+    answers = poll["answers"]
+    shown = poll.get("display_mode") == "always" and any(a.get("votes") is not None for a in answers)
+    total = sum(int(a.get("votes") or 0) for a in answers)
     rows = []
-    for a in poll["answers"]:
+    for a in answers:
         v = int(a.get("votes") or 0)
-        if poll.get("display_mode") == "always" and total:
-            pct = 100.0 * v / total
-            rows.append('<tr><td>%s</td><td class="pb"><span style="width:%.1f%%"></span></td><td class="n">%s (%.1f%%)</td></tr>'
+        if shown:
+            pct = 100.0 * v / total if total else 0.0
+            rows.append('<tr><td class="pl">%s</td><td class="pb"><span style="width:%.1f%%"></span></td><td class="n">%s (%.1f%%)</td></tr>'
                         % (e(a.get("answer") or ""), pct, num(v), pct))
         else:
-            rows.append('<tr><td colspan="3">%s</td></tr>' % e(a.get("answer") or ""))
-    foot = "Total Voters: %s" % num(total) if total else "Results are shown on bitcointalk.org after you vote there."
+            rows.append('<tr><td class="pl" colspan="3">%s</td></tr>' % e(a.get("answer") or ""))
+    voters = poll.get("total_voters")
+    notes = []
+    if shown:
+        notes.append("Total Voters: <b>%s</b>" % num(voters if voters is not None else total))
+    else:
+        notes.append("Results are hidden for now; Bitcointalk shows them after you vote or when the poll closes.")
+    expiry = parse_dt(poll.get("expiration")) if poll.get("expiration") else None
+    if poll.get("locked"):
+        notes.append('<b class="neg">Voting closed</b>%s' % (" on %s" % when(poll["expiration"], short=True) if expiry else ""))
+    elif expiry:
+        notes.append("Voting closes on %s" % when(poll["expiration"]))
+    if int(poll.get("max_answers") or 1) > 1:
+        notes.append("Up to %s options per voter" % num(poll["max_answers"]))
+    vote = ""
+    if tid:
+        vote = '<p class="btns">%s</p>' % act(bct("topic=%d.0" % tid), "Voting closed: view on Bitcointalk" if poll.get("locked") else "Vote on Bitcointalk",
+                                             "Opens the topic on bitcointalk.org, where members vote", "btn")
     return ('<section class="tb poll"><h2 class="catbg">Poll</h2><div class="pad"><p><b>Question:</b> %s</p>'
-            '<table class="pollt"><tbody>%s</tbody></table><p class="small muted">%s</p></div></section>'
-            % (e(poll.get("question") or ""), "".join(rows), foot))
+            '<table class="pollt"><tbody>%s</tbody></table><p class="small muted pnote">%s</p>%s</div></section>'
+            % (e(poll.get("question") or ""), "".join(rows), " · ".join(notes), vote))
 
 
 def page_thread(tid, q):
@@ -867,7 +887,7 @@ def page_thread(tid, q):
     body = ('%s%s<div class="bar">%s%s</div><div class="tb"><table class="grid posts"><thead><tr class="catbg">'
             '<th scope="col" class="poster">Author</th><th scope="col">Topic: <h1>%s</h1> <span class="sub">(%s posts)</span></th></tr></thead>'
             '<tbody>%s</tbody></table></div><div class="bar">%s%s</div>'
-            % (crumbs_html(crumbs), poll_html(thread.get("poll")) if page == 1 else "", pg, buttons, e(title), num(count),
+            % (crumbs_html(crumbs), poll_html(thread.get("poll"), tid) if page == 1 else "", pg, buttons, e(title), num(count),
                "".join(rows), pg, buttons))
     return layout(title, body, active="boards", canonical=here)
 
