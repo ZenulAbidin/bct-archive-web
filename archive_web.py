@@ -549,7 +549,7 @@ def layout(title, body, q="", canonical="", noindex=False, active="", scripts=()
 </main>
 <footer class="ft">
 <p>%s %s is an unofficial, read-only archive of public Bitcointalk posts and is not affiliated with bitcointalk.org. Posts belong to their authors.</p>
-<p>Credits: public posts and profiles from <a href="https://bitcointalk.org" rel="noopener">bitcointalk.org</a>; trust lists and merit totals from <a href="https://loyce.club" rel="noopener">LoyceV</a>; post edit history from the <a href="https://bitlist.co" rel="noopener">BitList Archive</a>; search by <a href="https://talksearch.io" rel="noopener">TalkSearch</a>.</p>
+<p>Credits: public posts and profiles from <a href="https://bitcointalk.org" rel="noopener">bitcointalk.org</a>; trust lists and merit totals from <a href="https://loyce.club" rel="noopener">LoyceV</a>; post edit history from the <a href="https://bitlist.co" rel="noopener">BitList Archive</a> and LoyceV; search by <a href="https://talksearch.io" rel="noopener">TalkSearch</a>.</p>
 <p>Made by <a href="https://bitcointalk.org/index.php?action=profile;u=2739424" rel="noopener">NotATether</a></p>
 <p><a href="/">Home</a> | <a href="/search/posts">Search</a> | <a href="/search/users">Members</a>%s</p>
 </footer>
@@ -873,12 +873,13 @@ def page_history(pid):
                     '<td class="msg"><div class="content">%s</div></td></tr>'
                     % ("alt" if i % 2 else "", i + 1, when(v.get("date")),
                        '<div class="neg">Post was deleted</div>' if v.get("deleted") else "",
-                       '<div class="small muted">Recorded by %s</div>' % ("TalkSearch" if v.get("source") == "talksearch" else "BitList"),
+                       '<div class="small muted">%s</div>' % {"talksearch": "Recorded by TalkSearch", "loyce": "As first posted (LoyceV's archive)"}.get(v.get("source"), "Recorded by BitList"),
                        post_body(v.get("body_html"), tid, ())))
     if not hist.get("available"):
         note = "<p>The edit history could not be loaded just now. Try again in a minute, or use the link below.</p>"
     elif not versions:
-        note = "<p>No earlier version of this post is on record: it was not edited, or the edit happened when nobody was recording.</p>"
+        note = ("<p>This post reads the same as when it was first posted (checked against LoyceV's archive).</p>" if hist.get("unchanged_since_posting")
+                else "<p>No earlier version of this post is on record: it was not edited, or the edit happened when nobody was recording.</p>")
     else:
         note = "<p>%d recorded version%s, oldest first. The version now in the archive is shown last.</p>" % (
             len(versions), "" if len(versions) == 1 else "s")
@@ -887,7 +888,8 @@ def page_history(pid):
                 % (when(post.get("created_at")), post_body(post.get("body_html"), tid, ())))
     body = ('%s<div class="tb"><h1 class="catbg">Edit history of a post by %s</h1><div class="pad">%s'
             '<p class="small">Edits made since 13 November 2026 are recorded by TalkSearch itself. Older versions (up to April 2025) come from the '
-            '<a href="https://bitlist.co" rel="noopener">BitList Archive</a> and are shown with permission. %s</p></div>'
+            '<a href="https://bitlist.co" rel="noopener">BitList Archive</a>, and the post as first made comes from '
+            '<a href="https://loyce.club" rel="noopener">LoyceV\'s archive</a>; both are shown with permission. %s</p></div>'
             '<table class="grid posts"><tbody>%s</tbody></table></div>'
             % (crumbs_html([("Back to the post", back), ("Edit history", "")]), e(name), note, bitlist, "".join(rows)))
     return layout("Edit history", body, noindex=True, active="boards")

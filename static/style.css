@@ -207,3 +207,4 @@ textarea#msg { width: 100%; min-height: 220px; font: 13px/1.4 var(--mono); resiz
 .topics th.bump, .topics td.bump { width: 70px; text-align: center; white-space: nowrap; }
 .m-sort { display: none; padding: 4px 10px; margin: 0; } .m-sort a { padding: 2px 3px; }
 @media (max-width: 760px) { .m-sort { display: block; } .topics td.bump { display: none; } }
+.topics td.n, .boards td.stats { white-space: nowrap; }
