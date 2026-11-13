@@ -1,15 +1,23 @@
 // SPDX-License-Identifier: MIT — optional progressive enhancement; every page works without it.
 (function () {
   // 1. Dates in the reader's own time zone (the server prints UTC).
-  var fmt, sfmt;
+  var fmt, sfmt, tfmt, today = new Date().toDateString();
   try {
     fmt = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'long', day: '2-digit', hour: '2-digit', minute: '2-digit' });
     sfmt = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    tfmt = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' });
   } catch (e) {}
   document.querySelectorAll('time[datetime]').forEach(function (t) {
     var d = new Date(t.getAttribute('datetime'));
     if (isNaN(d) || !fmt) return;
     t.title = t.textContent;
+    if (d.toDateString() === today && tfmt) {  // like the forum itself: "Today at 06:35 AM"
+      var b = document.createElement('b');
+      b.textContent = 'Today';
+      t.textContent = '';
+      t.append(b, ' at ' + tfmt.format(d));
+      return;
+    }
     t.textContent = (/UTC$/.test(t.textContent) ? fmt : sfmt).format(d);
   });
   // 2. Images that cannot be loaded become a short note instead of a broken icon.
