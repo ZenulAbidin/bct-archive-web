@@ -40,7 +40,7 @@ Then open http://127.0.0.1:18190/.
 | `ARCHIVE_API` | `http://127.0.0.1:18183` | Base URL of the archive JSON API |
 | `BIND` | `127.0.0.1` | Listen address |
 | `PORT` | `18190` | Listen port |
-| `SITE_NAME` | `Bitcointalk Archive` | Name in the header and titles |
+| `SITE_NAME` | `Bitcointalk Forum` | Name in the header and titles |
 | `SITE_TAGLINE` | `by TalkSearch` | Small text after the name |
 | `SOURCE_URL` | empty | If set, a "Source code" link in the footer |
 

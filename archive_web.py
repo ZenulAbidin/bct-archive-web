@@ -36,7 +36,7 @@ import imgproxy
 API = os.environ.get("ARCHIVE_API", "http://127.0.0.1:18183").rstrip("/")
 BIND = os.environ.get("BIND", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "18190"))
-SITE = os.environ.get("SITE_NAME", "Bitcointalk Archive")
+SITE = os.environ.get("SITE_NAME", "Bitcointalk Forum")
 SITE_TAG = os.environ.get("SITE_TAGLINE", "by TalkSearch")
 SOURCE_URL = os.environ.get("SOURCE_URL", "")
 TALKSEARCH_API = os.environ.get("TALKSEARCH_API", "").rstrip("/")   # optional: ranked advanced search
@@ -569,7 +569,7 @@ def page_home(q):
     out.append('<section class="tb"><h2 class="catbg">Info Center</h2><table class="grid"><tbody>'
                '<tr><td class="titlebg" colspan="2">Recent Posts</td></tr><tr><td class="ic">%s</td><td class="w2"><ul class="plain">%s</ul>'
                '<p class="small"><a href="/recent">View the most recent posts</a></p></td></tr>'
-               '<tr><td class="titlebg" colspan="2">Archive Stats</td></tr><tr><td class="ic">%s</td><td class="w2 small">'
+               '<tr><td class="titlebg" colspan="2">Forum Stats</td></tr><tr><td class="ic">%s</td><td class="w2 small">'
                '%s Posts in %s Topics across %s boards</td></tr></tbody></table></section>'
                % (ICON_POST, recent, ICON_POST, num(total_posts), num(total_topics), num(len(boards))))
     return layout("", "".join(out), active="boards", canonical="/")
