@@ -407,6 +407,9 @@ ICON_BOARD = ('<svg class="bi %s" viewBox="0 0 32 32" width="30" height="30" rol
               '<path class="b2" d="M26 12h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-1v3l-4-3h-7a2 2 0 0 1-2-2v-.5h7a4 4 0 0 0 4-4z"/></svg>')
 ICON_TOPIC = ('<svg class="ti %s" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">'
               '<path d="M3 1.5h7l3 3v10H3z"/><path class="b2" d="M5.5 7h5M5.5 9.5h5M5.5 12h3" fill="none"/></svg>')
+ICON_PM = ('<svg class="pmi" viewBox="0 0 18 13" width="18" height="13" aria-hidden="true">'
+           '<rect x=".75" y=".75" width="16.500" height="11.500" rx="1.200" fill="var(--win2)" stroke="currentColor" stroke-width="1.500"/>'
+           '<path d="M1.200 1.400 9 7.600l7.800-6.200" fill="none" stroke="currentColor" stroke-width="1.500" stroke-linejoin="round"/></svg>')
 ICON_PIN = ('<svg class="pin" viewBox="0 0 16 16" width="13" height="13" role="img" aria-label="Sticky topic"><title>Sticky topic</title>'
             '<path d="M9.800 1.200 14.800 6.200 13.400 7.600 12.300 7.200 9.700 9.800 10 13 8.600 14.400 5.300 11.100 1.700 14.700 1.300 14.300 4.900 10.700 1.600 7.400 3 6l3.200.300L8.800 3.700 8.400 2.600z"/></svg> ')
 ICON_FOLD = ('<svg class="fold" viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">'
@@ -811,12 +814,16 @@ def page_thread(tid, q):
             info.append("<div>Activity: %s</div>" % num(u["activity"]))
         info.append("<div>Merit: %s</div>" % num(u.get("merit") or 0))
         av = avatar_html(p.get("avatar") or u.get("avatar"), name, 64)
-        tr = trust_html(u.get("stats"))
+        tr = ""
         ulinks = ""
         if uid:
-            ulinks = '<div class="ulinks">%s %s %s</div>' % (
-                act(bct("action=pm;sa=send;u=%s" % uid), "PM", "Send this member a personal message"),
-                act(bct("action=trust;u=%s" % uid), "Trust", "View or leave trust feedback"),
+            # Trust on its own line under the avatar, as on the forum: Trust: +7 / =2 / -0 (links to the trust page).
+            score = trust_html(u.get("stats"), "")
+            tr = ('<a class="pop utrust" href="%s" target="_blank" rel="noopener nofollow" title="View or leave trust feedback">Trust: %s</a>'
+                  % (e(bct("action=trust;u=%s" % uid)), score or '<span class="muted">not rated</span>'))
+            ulinks = '<div class="ulinks">%s %s</div>' % (
+                '<a class="pop pm" href="%s" target="_blank" rel="noopener nofollow" title="Send this member a personal message" aria-label="Send a personal message">%s</a>'
+                % (e(bct("action=pm;sa=send;u=%s" % uid)), ICON_PM),
                 act(bct("topic=%d.msg%s#msg%s" % (tid, pid, pid)), "Ignore", "Opens the post on bitcointalk.org, where Ignore sits under the author"))
         merit = ""
         if p.get("merit"):
