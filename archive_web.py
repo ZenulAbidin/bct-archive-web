@@ -969,7 +969,7 @@ def page_compose(q):
                 if talkimg.enabled() else "")
     body = ('%s<div class="tb"><h1 class="catbg">%s</h1><div class="pad composer" id="composer" data-key="%s" data-target="%s">'
             '<noscript><p class="warn">The composer needs JavaScript. You can also %s.</p></noscript>'
-            '%s<h2 class="titlebg">Preview</h2><div id="preview" class="content preview" aria-live="polite"></div>'
+            '<h2 class="titlebg">Preview</h2><div id="preview" class="content preview" aria-live="polite"></div>%s'
             '<div class="toolbar" role="toolbar" aria-label="Formatting">%s</div>'
             '<label class="sr" for="msg">Message (BBCode)</label><textarea id="msg" rows="12" spellcheck="true"></textarea>'
             '%s'

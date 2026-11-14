@@ -168,7 +168,7 @@ details.merited > summary::-webkit-details-marker { display: none; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 2px; margin: 6px 0 4px; }
 .toolbar button { width: 30px; height: 28px; padding: 0; justify-content: center; color: var(--fg); } .toolbar button svg { display: block; }
 textarea#msg { width: 100%; min-height: 220px; font: 13px/1.4 var(--mono); resize: vertical; }
-.preview { min-height: 60px; padding: 8px 10px; border: 1px solid var(--line); border-top: 0; background: var(--win2); }
+.preview { min-height: 60px; margin-bottom: 8px; padding: 8px 10px; border: 1px solid var(--line); border-top: 0; background: var(--win2); }
 #status { margin-left: 6px; color: var(--pos); font-weight: bold; }
 
 .ft { margin-top: 12px; padding: 8px 10px; border: 1px solid var(--line); background: var(--win); font-size: 11px; color: var(--muted); }
