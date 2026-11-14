@@ -614,7 +614,7 @@ def board_row(n, boards):
             % (ICON_BOARD % ("new" if new else "", "New posts in the last day" if new else "No new posts in the last day"),
                n["id"], e(n["name"]), ('<div class="desc">%s</div>' % e(desc) if desc else "") + mods, kids,
                num(n.get("post_count")), num(n.get("thread_count")),
-               '<div class="m-last">Last post by %s, %s</div>' % (user_link(n.get("last_post_username")), when(n.get("last_post_created_at")))
+               '<div class="m-last">Last post by %s, %s %s</div>' % (user_link(n.get("last_post_username")), when(n.get("last_post_created_at")), go_last(n["last_thread_id"]))
                if n.get("last_thread_id") else "",
                num(n.get("post_count")), num(n.get("thread_count")), last))
 
