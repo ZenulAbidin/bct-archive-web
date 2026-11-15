@@ -574,7 +574,7 @@ def layout(title, body, q="", canonical="", noindex=False, active="", scripts=()
        '<meta name="robots" content="noindex">\n' if noindex else "",
        ASSET_V, ASSET_V, ASSET_V, extra, e(SITE), TAG_HTML, e(q),
        tab("/", "Home", "boards"), tab("/search/posts", "Search", "search"), tab("/search/users", "Members", "members"),
-       tab("/recent", "Recent posts", "recent") + tab("/stats", "Stats", "stats"),
+       tab("/recent", "Recent posts", "recent") + tab("/stats", "Stats", "stats") + tab("/modlog", "Mod log", "modlog"),
        act(bct("action=login"), "Login"), act(bct("action=register"), "Register"),
        body, e(SITE), e(SITE_TAG), src)
 
@@ -1320,6 +1320,66 @@ def page_forum_stats(q=None):
     return layout("Forum statistics", body, active="stats", canonical="/stats")
 
 
+# --------------------------------------------------------------------------- moderation log
+def page_modlog(q):
+    def val(k):
+        return (q.get(k, [""])[0] or "").strip()[:80]
+    keep = {k: val(k) for k in ("from", "to", "action", "board_id", "member") if val(k)}
+    page = int(val("page")) if val("page").isdigit() else 1
+    d = optional("/api/modlog?" + urllib.parse.urlencode(dict(keep, page=page)), 120) or {}
+    if not d.get("available"):
+        return layout("Moderation log", '%s<div class="tb"><h1 class="catbg">Moderation log</h1><p class="pad">The moderation log is not available right now.</p></div>'
+                      % crumbs_html([("Moderation log", "/modlog")]), active="modlog", canonical="/modlog")
+    def opts(items, cur, first):
+        return '<option value="">%s</option>' % first + "".join(
+            '<option value="%s"%s>%s (%s)</option>' % (e(str(v)), " selected" if str(v) == cur else "", e(label), num(n)) for v, label, n in items)
+    def date_field(name, label):
+        return ('<div class="fld"><label for="ml-%s">%s</label><span class="dt"><input id="ml-%s" name="%s" type="date" min="2026-09-16" max="%s" value="%s">'
+                '<button type="button" class="btn dclr" data-clear="ml-%s" hidden>Clear</button></span></div>'
+                % (name, label, name, name, time.strftime("%Y-%m-%d", time.gmtime(time.time() + 86400)), e(val(name)), name))
+    form = ('<form class="sform mlf" action="/modlog" method="get"><div class="grid2">%s%s'
+            '<div class="fld"><label for="ml-action">Action</label><select id="ml-action" name="action">%s</select></div>'
+            '<div class="fld"><label for="ml-board">Board</label><select id="ml-board" name="board_id">%s</select></div>'
+            '<div class="fld"><label for="ml-member">Member (name or number)</label><input id="ml-member" name="member" type="text" value="%s" autocomplete="off"></div></div>'
+            '<p class="row"><button class="btn primary" type="submit">Show</button> <a class="btn" href="/modlog">All entries</a></p></form>'
+            % (date_field("from", "First seen from"), date_field("to", "First seen to"),
+               opts([(a["action"], a["action"], a["count"]) for a in d.get("actions") or []], val("action"), "Any action"),
+               opts([(b["id"], b["name"], b["count"]) for b in d.get("boards") or []], val("board_id"), "Any board"), e(val("member"))))
+    rows = []
+    for ev in d.get("events") or []:
+        t = when(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ev["first_seen"])))
+        if ev.get("approx"):
+            t = '<span class="muted" title="Already in the log when our record began">before %s</span>' % t
+        title = e(clean_title(ev.get("title"))) if ev.get("title") else ""
+        tid, pid = ev.get("topic_id"), ev.get("post_id")
+        if ev["action"] == "Remove topic":
+            subject = (title or "Topic %s" % tid) + ' <span class="muted">(topic %s, removed)</span>' % tid if tid else title
+        elif tid:
+            subject = '<a href="/threads/%s">%s</a>' % (tid, title or "Topic %s" % tid) + (' <span class="muted">(post %s, deleted)</span>' % pid if pid else "")
+        else:
+            subject = title or ('<span class="muted">post %s</span>' % pid if pid else '<span class="muted">-</span>')
+        b = ev.get("board")
+        m = ev.get("member")
+        member = (user_link(m["username"]) if not m["username"].startswith("uid ") else '<a href="/profile/%s">member %s</a>' % (m["uid"], m["uid"])) if m else ""
+        rows.append('<tr><td class="mt">%s</td><td class="ma">%s</td><td class="ms">%s</td><td class="mb">%s</td><td class="mm">%s</td></tr>'
+                    % (t, e(ev["action"]), subject, '<a href="/boards/%s">%s</a>' % (b["id"], e(b["name"])) if b else "", member))
+    pages = max(1, -(-int(d.get("total") or 0) // int(d.get("limit") or 50)))
+    base = "/modlog" + ("?" + e(urllib.parse.urlencode(keep)) if keep else "")
+    nav = pager(base, page, pages, "Moderation log pages")
+    table = ('<table class="grid modlog"><thead><tr class="titlebg"><th scope="col">First seen</th><th scope="col">Action</th><th scope="col">Subject</th>'
+             '<th scope="col">Board</th><th scope="col">Member</th></tr></thead><tbody>%s</tbody></table>' % "".join(rows)
+             if rows else '<p class="pad">No entries match.</p>')
+    last = d.get("last_collect")
+    note = ('<p class="pad small muted">This is the public deletion log of bitcointalk.org as this archive has seen it, checked every 15 minutes. '
+            'Times are when an entry was first seen here, not the exact time of the action, so they can be up to 15 minutes late. '
+            'The record starts on 16 September 2026; entries marked “before” were already in the log at that point. '
+            'Deleted posts and removed topics are not kept in this archive, so only the topic of a deleted post is linked. '
+            '%s entries%s.</p>' % (num(d.get("count")), ", last checked %s" % when(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(last))) if last else ""))
+    body = ('%s<div class="tb"><h1 class="catbg">Moderation log</h1>%s<div class="bar">%s<span class="muted">%s entr%s</span></div>%s<div class="bar">%s</div>%s</div>'
+            % (crumbs_html([("Moderation log", "/modlog")]), form, nav, num(d.get("total")), "y" if d.get("total") == 1 else "ies", table, nav, note))
+    return layout("Moderation log", body, active="modlog", canonical="/modlog", noindex=bool(keep) or page > 1)
+
+
 # --------------------------------------------------------------------------- search
 def search_form(term, adv, q):
     def val(k):
@@ -1475,6 +1535,7 @@ ROUTES = [
     (re.compile(r"^/profile/([^/]+)/trust/?$"), lambda m, q: page_user_trust(urllib.parse.unquote(m.group(1)))),
     (re.compile(r"^/profile/([^/]+)/stats/?$"), lambda m, q: page_user_stats(urllib.parse.unquote(m.group(1)))),
     (re.compile(r"^/stats/?$"), lambda m, q: page_forum_stats(q)),
+    (re.compile(r"^/modlog/?$"), lambda m, q: page_modlog(q)),
     (re.compile(r"^/profile/([^/]+)(?:/(posts))?/?$"),
      lambda m, q: page_profile(urllib.parse.unquote(m.group(1)), q, m.group(2) or "")),
     (re.compile(r"^/search/posts/?$"), lambda m, q: page_search_posts(q)),

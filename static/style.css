@@ -152,6 +152,16 @@ details.merited > summary::-webkit-details-marker { display: none; }
 .pollt { border-collapse: collapse; width: 100%; max-width: 640px; } .pollt td { padding: 2px 6px 2px 0; }
 .pollt caption { text-align: left; font-weight: bold; padding: 4px 0; }
 .pb { width: 45%; } .pb span { display: block; height: 10px; background: var(--brand); border: 1px solid var(--cat); min-width: 1px; }
+/* moderation log */
+.mlf { padding: 8px 10px 0; }
+.modlog td { vertical-align: top; } .modlog .mt { white-space: nowrap; width: 1%; } .modlog .ma { white-space: nowrap; width: 1%; font-weight: bold; }
+.modlog .ms { overflow-wrap: anywhere; } .modlog .mb, .modlog .mm { width: 16%; }
+@media (max-width: 720px) {
+  .modlog thead { display: none; } .modlog, .modlog tbody, .modlog tr, .modlog td { display: block; width: auto; }
+  .modlog tr { padding: 6px 8px; border-top: 1px solid var(--line); } .grid.modlog td { border: 0; padding: 0; background: none; }
+  .modlog .mt, .modlog .ma { display: inline; white-space: normal; } .modlog .ma::before { content: " · "; font-weight: normal; }
+  .modlog .ms { padding: 2px 0; } .modlog .mb, .modlog .mm { display: inline; } .modlog .mm:not(:empty)::before { content: " · "; }
+}
 /* statistics: period picker and bar charts */
 .pick { display: flex; flex-wrap: wrap; gap: 6px 22px; padding: 8px 10px 0; align-items: center; } .pick span { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .pick .btn { text-decoration: none; }
