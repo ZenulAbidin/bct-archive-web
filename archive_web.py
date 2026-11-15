@@ -1226,8 +1226,76 @@ def page_user_trust(name):
     return layout("Trust feedback - %s" % uname, body, active="members", noindex=True)
 
 
-def page_forum_stats():
+PERIODS = (("24h", "24 hours"), ("7d", "7 days"), ("30d", "30 days"))
+
+
+def chart(caption, points, cls=""):
+    """points: (label, number). A bar chart as inline SVG: no script, colours from the theme."""
+    if not points:
+        return ""
+    top = max(v for _, v in points) or 1
+    n = len(points)
+    rects = "".join('<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f"><title>%s: %s</title></rect>'
+                    % (i + 0.12, 100 - 100.0 * v / top, 0.76, 100.0 * v / top, e(label), num(v)) for i, (label, v) in enumerate(points) if v)
+    return ('<figure class="chart %s"><figcaption>%s <span class="muted">(highest: %s)</span></figcaption>'
+            '<svg viewBox="0 0 %d 100" preserveAspectRatio="none" role="img" aria-label="%s">%s</svg>'
+            '<div class="axis"><span>%s</span><span>%s</span></div></figure>'
+            % (cls, e(caption), num(top), n, e(caption), rects, e(points[0][0]), e(points[-1][0])))
+
+
+def activity_block(q):
+    """Posts and merit for a chosen period, per hour or per day (from /api/stats/activity)."""
+    period = (q.get("period", ["24h"])[0] or "24h")
+    if period not in dict(PERIODS):
+        period = "24h"
+    step = (q.get("step", [""])[0] or "")
+    if step not in ("hour", "day"):
+        step = "day" if period == "30d" else "hour"
+    act = optional("/api/stats/activity?period=%s" % period, 300)
+    if not act:
+        return ""
+    m = act.get("merit") or {}
+    label = dict(PERIODS)[period]
+    def pick(items, cur, key, other):
+        return "".join('<a class="btn%s" href="/stats?%s=%s&amp;%s#activity"%s>%s</a>'
+                       % (" primary" if k == cur else "", key, k, other, ' aria-current="true"' if k == cur else "", e(v)) for k, v in items)
+    picker = ('<div class="pick"><span>Period: %s</span><span>Chart: %s</span></div>'
+              % (pick(PERIODS, period, "period", "step=" + step), pick((("hour", "Per hour"), ("day", "Per day")), step, "step", "period=" + period)))
+    hours = act.get("hours") or []
+    if step == "day":
+        days = {}
+        for h in hours:
+            d = days.setdefault(time.strftime("%b %d", time.gmtime(h["t"])), [0, 0]); d[0] += h["posts"]; d[1] += h["merit"]
+        posts = [(k, v[0]) for k, v in days.items()]; merits = [(k, v[1]) for k, v in days.items()]
+    else:
+        fmt = lambda t: time.strftime("%b %d, %H:00 UTC", time.gmtime(t))
+        posts = [(fmt(h["t"]), h["posts"]) for h in hours]; merits = [(fmt(h["t"]), h["merit"]) for h in hours]
+    unit = "day" if step == "day" else "hour"
+    def board(b):
+        return ' <span class="muted">in <a href="/boards/%s">%s</a></span>' % (b["id"], e(b["name"])) if b else ""
+    def users(rows, field):
+        return [(user_link(x["username"]), x[field]) for x in rows or []]
+    lists = [
+        bars("Most merit received", users(m.get("receivers"), "merit")) if m else "",
+        bars("Most merit sent", users(m.get("senders"), "merit")) if m else "",
+        bars("Most active members", users(act.get("posters"), "posts")),
+        bars("Most active topics", [('<a href="/threads/%s">%s</a>%s' % (t["id"], e(clean_title(t.get("title")) or "Topic %s" % t["id"]), board(t.get("board"))), t["posts"])
+                                    for t in act.get("topics") or []]),
+        bars("Most merited posts", [('<a href="/threads/%s?post=%s#%s">%s</a>%s%s' % (
+            p.get("topic_id") or 0, p["post_id"], p["post_id"], e(clean_title(p.get("title")) or "Post %s" % p["post_id"]),
+            " by %s" % user_link(p["author"]) if p.get("author") else "", board(p.get("board"))), p["merit"]) for p in m.get("posts") or []]) if m else "",
+        bars("Most active boards", [('<a href="/boards/%s">%s</a>' % (b["id"], e(b["name"])), b["posts"]) for b in act.get("boards") or []]),
+    ]
+    facts = "%s posts" % num(act.get("posts")) + (" and %s merit in %s transactions" % (num(m["total"]), num(m["transactions"])) if m else "")
+    return ('<h2 class="titlebg" id="activity">Activity, last %s</h2>%s<p class="pad">%s in the last %s.</p>'
+            '<div class="two charts">%s%s</div><div class="two stats-grid">%s</div>'
+            % (e(label), picker, facts, e(label), chart("Posts per %s" % unit, posts), chart("Merit per %s" % unit, merits, "merit") if m else "",
+               "".join(b for b in lists if b)))
+
+
+def page_forum_stats(q=None):
     st = api("/api/stats", ttl=600)
+    activity = activity_block(q or {})
     m = st.get("merit") or {}
     facts = [("Posts in the last 30 days", num(st.get("posts_30d")))]
     if m:
@@ -1238,13 +1306,6 @@ def page_forum_stats():
     def users(key, field):
         return [(user_link(x["username"]), x[field]) for x in (m.get(key) if field == "merit" else st.get(key)) or []]
     blocks = [
-        bars("Most merit received, last 30 days", users("receivers_30d", "merit")) if m else "",
-        bars("Most merit sent, last 30 days", users("senders_30d", "merit")) if m else "",
-        bars("Most merited posts, last 30 days", merit_post_rows(m.get("posts_30d") or [])) if m else "",
-        bars("Most active members, last 30 days", users("posters_30d", "posts")),
-        bars("Most active boards, last 30 days", [('<a href="/boards/%s">%s</a>' % (b["id"], e(b["name"])), b["posts"]) for b in st.get("boards_30d") or []]),
-        bars("Most active topics, last 30 days", [('<a href="/threads/%s">%s</a>' % (t["id"], e(clean_title(t.get("title")) or "Topic %s" % t["id"])), t["posts"])
-                                                  for t in st.get("topics_30d") or []]),
         bars("Most merit received, all time", users("receivers_all", "merit")) if m else "",
         bars("Most merit sent, all time", users("senders_all", "merit")) if m else "",
         bars("Most merited posts, all time", merit_post_rows(m.get("posts_all") or [])) if m else "",
@@ -1252,10 +1313,10 @@ def page_forum_stats():
         bars("Posts per month, last 24 months", [(x["month"], x["posts"]) for x in st.get("months") or []]),
     ]
     body = ('%s<div class="tb"><h1 class="catbg">Forum statistics</h1><div class="summary"><table class="kv"><tbody>%s</tbody></table></div>'
-            '<div class="two stats-grid">%s</div>'
-            '<p class="pad small muted">Posting figures are counted from the posts in this archive. Merit figures come from the public merit data published by LoyceV. '
+            '%s<h2 class="titlebg">All time</h2><div class="two stats-grid">%s</div>'
+            '<p class="pad small muted">Posting figures are counted from the posts in this archive. Merit figures come from the public merit lists of Bitcointalk and the merit data published by LoyceV. Times are UTC. '
             'Open a member\'s profile and choose Statistics for their own figures.</p></div>'
-            % (crumbs_html([("Statistics", "/stats")]), dl, "".join(b for b in blocks if b)))
+            % (crumbs_html([("Statistics", "/stats")]), dl, activity, "".join(b for b in blocks if b)))
     return layout("Forum statistics", body, active="stats", canonical="/stats")
 
 
@@ -1413,7 +1474,7 @@ ROUTES = [
     (re.compile(r"^/threads/(\d+)(?:/[^/]*)?/?$"), lambda m, q: page_thread(int(m.group(1)), q)),
     (re.compile(r"^/profile/([^/]+)/trust/?$"), lambda m, q: page_user_trust(urllib.parse.unquote(m.group(1)))),
     (re.compile(r"^/profile/([^/]+)/stats/?$"), lambda m, q: page_user_stats(urllib.parse.unquote(m.group(1)))),
-    (re.compile(r"^/stats/?$"), lambda m, q: page_forum_stats()),
+    (re.compile(r"^/stats/?$"), lambda m, q: page_forum_stats(q)),
     (re.compile(r"^/profile/([^/]+)(?:/(posts))?/?$"),
      lambda m, q: page_profile(urllib.parse.unquote(m.group(1)), q, m.group(2) or "")),
     (re.compile(r"^/search/posts/?$"), lambda m, q: page_search_posts(q)),

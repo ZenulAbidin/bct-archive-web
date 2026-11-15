@@ -152,6 +152,13 @@ details.merited > summary::-webkit-details-marker { display: none; }
 .pollt { border-collapse: collapse; width: 100%; max-width: 640px; } .pollt td { padding: 2px 6px 2px 0; }
 .pollt caption { text-align: left; font-weight: bold; padding: 4px 0; }
 .pb { width: 45%; } .pb span { display: block; height: 10px; background: var(--brand); border: 1px solid var(--cat); min-width: 1px; }
+/* statistics: period picker and bar charts */
+.pick { display: flex; flex-wrap: wrap; gap: 6px 22px; padding: 8px 10px 0; align-items: center; } .pick span { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.pick .btn { text-decoration: none; }
+.chart { margin: 0; min-width: 0; } .chart figcaption { font-weight: bold; padding: 2px 0 4px; } .chart figcaption .muted { font-weight: normal; }
+.chart svg { display: block; width: 100%; height: 120px; border: 1px solid var(--line); border-width: 0 0 1px 1px; fill: var(--link); }
+.chart.merit svg { fill: var(--pos); }
+.chart .axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); padding-top: 2px; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; padding: 6px 10px 10px; }
 .kv th { width: 170px; font-weight: bold; white-space: nowrap; } .kv td, .kv th { padding: 3px 8px; vertical-align: top; text-align: left; }
 .summary { display: flex; gap: 12px; padding: 8px 10px; } .summary .kv { flex: 1; border-collapse: collapse; min-width: 0; } .summary .av { flex: none; }
