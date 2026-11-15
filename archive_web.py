@@ -1348,31 +1348,35 @@ def page_modlog(q):
     rows = []
     for ev in d.get("events") or []:
         t = when(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ev["first_seen"])))
-        if ev.get("approx"):
-            t = '<span class="muted" title="Already in the log when our record began">before %s</span>' % t
+        if ev.get("approx"):   # already in the log when we first read it: only the day we first saw it is known
+            t = 'first seen %s <span class="muted">(actual date unknown)</span>' % time.strftime("%d %b %Y", time.gmtime(ev["first_seen"])).lstrip("0")
         title = e(clean_title(ev.get("title"))) if ev.get("title") else ""
-        tid, pid = ev.get("topic_id"), ev.get("post_id")
-        if ev["action"] == "Remove topic":
-            subject = (title or "Topic %s" % tid) + ' <span class="muted">(topic %s, removed)</span>' % tid if tid else title
-        elif tid:
-            subject = '<a href="/threads/%s">%s</a>' % (tid, title or "Topic %s" % tid) + (' <span class="muted">(post %s, deleted)</span>' % pid if pid else "")
-        else:
-            subject = title or ('<span class="muted">post %s</span>' % pid if pid else '<span class="muted">-</span>')
-        b = ev.get("board")
+        tid, pid, action = ev.get("topic_id"), ev.get("post_id"), ev["action"]
         m = ev.get("member")
-        member = (user_link(m["username"]) if not m["username"].startswith("uid ") else '<a href="/profile/%s">member %s</a>' % (m["uid"], m["uid"])) if m else ""
+        who = (user_link(m["username"]) if not m["username"].startswith("uid ") else '<a href="/profile/%s">member %s</a>' % (m["uid"], m["uid"])) if m else ""
+        ours = ' <span class="muted">(from our archive)</span>' if m and m.get("source") != "log" else ""
+        if action == "Remove topic":
+            subject = (title or "Topic %s" % tid) + ' <span class="muted">(topic %s, removed)</span>' % tid if tid else title
+            member = "started by %s%s" % (who, ours) if who else ""
+        elif action == "Delete reply":
+            subject = ('<a href="/threads/%s">%s</a>' % (tid, title or "Topic %s" % tid) if tid else (title or "")) + (' <span class="muted">(post %s, deleted)</span>' % pid if pid else "")
+            member = "posted by %s%s" % (who, ours) if who else ""
+        else:   # actions on a member: nuke, signature ban, automatic ban
+            subject = "Member %s" % who if who else '<span class="muted">-</span>'
+            member = ""
+        b = ev.get("board")
         rows.append('<tr><td class="mt">%s</td><td class="ma">%s</td><td class="ms">%s</td><td class="mb">%s</td><td class="mm">%s</td></tr>'
-                    % (t, e(ev["action"]), subject, '<a href="/boards/%s">%s</a>' % (b["id"], e(b["name"])) if b else "", member))
+                    % (t, e(action), subject, '<a href="/boards/%s">%s</a>' % (b["id"], e(b["name"])) if b else "", member))
     pages = max(1, -(-int(d.get("total") or 0) // int(d.get("limit") or 50)))
     base = "/modlog" + ("?" + e(urllib.parse.urlencode(keep)) if keep else "")
     nav = pager(base, page, pages, "Moderation log pages")
     table = ('<table class="grid modlog"><thead><tr class="titlebg"><th scope="col">First seen</th><th scope="col">Action</th><th scope="col">Subject</th>'
-             '<th scope="col">Board</th><th scope="col">Member</th></tr></thead><tbody>%s</tbody></table>' % "".join(rows)
+             '<th scope="col">Board</th><th scope="col">Author</th></tr></thead><tbody>%s</tbody></table>' % "".join(rows)
              if rows else '<p class="pad">No entries match.</p>')
     last = d.get("last_collect")
     note = ('<p class="pad small muted">This is the public deletion log of bitcointalk.org as this archive has seen it, checked every 15 minutes. '
             'Times are when an entry was first seen here, not the exact time of the action, so they can be up to 15 minutes late. '
-            'The record starts on 16 September 2026; entries marked “before” were already in the log at that point. '
+            'The record starts on 16 September 2026; where an entry was already in the log when it was first read here, only that first-seen day is shown. The log names the author of the deleted post or removed topic, or the member a ban applies to; it does not say which moderator acted. “From our archive” means the name was looked up in this archive because our early records kept only the post or topic number. '
             'Deleted posts and removed topics are not kept in this archive, so only the topic of a deleted post is linked. '
             '%s entries%s.</p>' % (num(d.get("count")), ", last checked %s" % when(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(last))) if last else ""))
     body = ('%s<div class="tb"><h1 class="catbg">Moderation log</h1>%s<div class="bar">%s<span class="muted">%s entr%s</span></div>%s<div class="bar">%s</div>%s</div>'
