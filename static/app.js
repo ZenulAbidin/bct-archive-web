@@ -66,6 +66,49 @@
     c.addEventListener('click', function () { f.value = ''; show(); });
     show();
   });
+  // 9. Phones: a signature wider than the screen (banner tables, block art, wide pictures) is scaled down to fit.
+  var narrow = window.matchMedia('(max-width: 720px)');
+  function fitSigs() {
+    document.querySelectorAll('.sig').forEach(function (s) {
+      var i = s.firstElementChild;
+      if (!i || !i.classList.contains('sigin')) return;
+      i.style.transform = i.style.width = s.style.height = '';
+      s.classList.remove('fit', 'min');
+      if (!narrow.matches) return;
+      var room = s.clientWidth, need = i.scrollWidth;
+      if (!room) return;
+      var cs = getComputedStyle(s), k;
+      var edge = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+      var cap = parseFloat(cs.maxHeight);   // the usual limit on a signature's height, kept in proportion
+      // Banners (tables, block art, pictures) get squeezed by a narrow column: their cells stack and most of the
+      // banner ends up below the height limit. Those are laid out at their natural width instead, then scaled.
+      var banner = i.querySelector('table, pre, tt, img') && cap && i.offsetHeight > cap - edge + 1;
+      if (need <= room + 1 && !banner) return;
+      if (banner) {
+        i.style.width = 'max-content';
+        need = Math.max(room, Math.min(i.offsetWidth, 900));
+      }
+      for (var n = 0; n < 6; n++) {
+        i.style.width = need + 'px';
+        if (i.scrollWidth <= need + 1) break;
+        need = i.scrollWidth;
+      }
+      if (need <= room + 1) { i.style.width = ''; return; }
+      k = Math.max(room / need, 0.3);
+      i.style.transform = 'scale(' + k + ')';
+      var h = i.offsetHeight;
+      if (cap) h = Math.min(h, cap - edge);
+      s.style.height = Math.ceil(h * k + edge) + 'px';
+      s.classList.add('fit');
+      if (room / need < 0.3) s.classList.add('min');
+    });
+  }
+  if (document.querySelector('.sig')) {
+    fitSigs();
+    window.addEventListener('load', fitSigs);
+    window.addEventListener('resize', fitSigs);
+    document.querySelectorAll('.sig img').forEach(function (img) { if (!img.complete) img.addEventListener('load', fitSigs, { once: true }); });
+  }
   // 5. Theme switch (light is the default).
   var b = document.getElementById('theme');
   if (b) {

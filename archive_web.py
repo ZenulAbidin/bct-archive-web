@@ -864,7 +864,7 @@ def page_thread(tid, q):
                          % (ICON_FOLD, head, ", ".join("%s (%s)" % (user_link(x["username"]), num(x["merit"])) for x in mt["by"])))
             else:
                 merit = '<div class="merited">%s</div>' % head
-        sig = '<div class="sig" aria-label="Signature">%s</div>' % balanced(u["signature"], tight=True) if u.get("signature") else ""
+        sig = '<div class="sig" aria-label="Signature"><div class="sigin">%s</div></div>' % balanced(u["signature"], tight=True) if u.get("signature") else ""
         tools = '<a href="/compose?topic=%d&amp;quote=%s">Quote</a> %s' % (
             tid, pid, act(bct("action=merit;msg=%s" % pid), "Merit", "Send merit for this post"))
         acts = "".join([
@@ -1110,7 +1110,7 @@ def page_profile(name, q, sub=""):
         extra.append('<details class="tb"><summary class="titlebg">Posting statistics (from the archive)</summary><div class="two">'
                      '<table class="pollt"><caption>Most active boards</caption><tbody>%s</tbody></table>'
                      '<table class="pollt"><caption>Posts per year</caption><tbody>%s</tbody></table></div></details>' % (brow, yrow))
-    sig = ('<tr><th scope="row">Signature:</th><td><div class="sig full">%s</div></td></tr>' % balanced(u["signature"], tight=True)
+    sig = ('<tr><th scope="row">Signature:</th><td><div class="sig full"><div class="sigin">%s</div></div></td></tr>' % balanced(u["signature"], tight=True)
            if u.get("signature") else "")
     pg = pager(base, page, pages, "Post history pages")
     body = ('%s<div class="tb"><h1 class="catbg">Summary - %s</h1><div class="summary"><table class="kv"><tbody>%s%s</tbody></table>'
