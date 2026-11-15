@@ -893,6 +893,44 @@ def page_thread(tid, q):
 
 
 # --------------------------------------------------------------------------- post edit history
+def _plain(body_html):
+    """Post HTML as plain text for comparing versions: line breaks kept, tags dropped."""
+    t = re.sub(r"(?i)<br\s*/?>|</div>|</p>|</li>|</tr>", "\n", body_html or "")
+    return html.unescape(re.sub(r"<[^>]+>", "", t)).strip()
+
+
+def diff_html(old, new):
+    """Word-level difference between two versions: (html, words added, words removed), or None if too long to compare."""
+    import difflib
+    a, b = re.findall(r"\s+|\S+", _plain(old)), re.findall(r"\s+|\S+", _plain(new))
+    if len(a) > 20000 or len(b) > 20000:
+        return None
+    out, added, removed = [], 0, 0
+    for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
+        if op == "equal":
+            seg = "".join(a[i1:i2])
+            if len(seg) > 400:      # long unchanged stretches are shortened so the changes stand out
+                seg = seg[:160] + " … " + seg[-160:]
+            out.append(e(seg))
+            continue
+        if op in ("delete", "replace"):
+            removed += sum(1 for w in a[i1:i2] if not w.isspace()); out.append("<del>%s</del>" % e("".join(a[i1:i2])))
+        if op in ("insert", "replace"):
+            added += sum(1 for w in b[j1:j2] if not w.isspace()); out.append("<ins>%s</ins>" % e("".join(b[j1:j2])))
+    return "".join(out), added, removed
+
+
+def changes_block(old, new, label):
+    d = diff_html(old, new)
+    if d is None:
+        return '<p class="small muted">These versions are too long to compare here.</p>'
+    body, added, removed = d
+    if not added and not removed:
+        return '<p class="small muted">Same wording as %s (only formatting, links or pictures differ, if anything).</p>' % e(label)
+    return ('<details class="chg" open><summary>What changed from %s: <span class="pos">+%s word%s</span>, <span class="neg">−%s word%s</span></summary>'
+            '<div class="diff">%s</div></details>' % (e(label), num(added), "" if added == 1 else "s", num(removed), "" if removed == 1 else "s", body))
+
+
 def page_history(pid):
     post = api("/api/posts/%d" % pid, ttl=60)
     tid = int(post.get("thread_id") or 0)
@@ -911,7 +949,7 @@ def page_history(pid):
                     % ("alt" if i % 2 else "", i + 1, when(v.get("date")),
                        '<div class="neg">Post was deleted</div>' if v.get("deleted") else "",
                        '<div class="small muted">%s</div>' % {"talksearch": "Recorded by TalkSearch", "loyce": "As first posted (LoyceV's archive)"}.get(v.get("source"), "Recorded by BitList"),
-                       post_body(v.get("body_html"), tid, ())))
+                       post_body(v.get("body_html"), tid, ()) + (changes_block(versions[i - 1].get("body_html"), v.get("body_html"), "version %d" % i) if i else "")))
     if not hist.get("available"):
         note = "<p>The edit history could not be loaded just now. Try again in a minute, or use the link below.</p>"
     elif not versions:
@@ -922,7 +960,8 @@ def page_history(pid):
             len(versions), "" if len(versions) == 1 else "s")
     rows.append('<tr class="post"><td class="poster"><b>In the archive now</b><div>%s</div></td>'
                 '<td class="msg"><div class="content">%s</div></td></tr>'
-                % (when(post.get("created_at")), post_body(post.get("body_html"), tid, ())))
+                % (when(post.get("created_at")), post_body(post.get("body_html"), tid, ())
+                   + (changes_block(versions[-1].get("body_html"), post.get("body_html"), "version %d" % len(versions)) if versions else "")))
     body = ('%s<div class="tb"><h1 class="catbg">Edit history of a post by %s</h1><div class="pad">%s'
             '<p class="small">Edits made since 13 November 2026 are recorded by TalkSearch itself. Older versions (up to April 2025) come from the '
             '<a href="https://bitlist.co" rel="noopener">BitList Archive</a>, and the post as first made comes from '
