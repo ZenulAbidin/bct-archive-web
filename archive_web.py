@@ -41,6 +41,7 @@ SITE = os.environ.get("SITE_NAME", "Bitcointalk Forum")
 SITE_TAG = os.environ.get("SITE_TAGLINE", "by TalkSearch")
 SITE_TAG_URL = os.environ.get("SITE_TAGLINE_URL", "https://talksearch.io")  # the name after "by " links here
 SOURCE_URL = os.environ.get("SOURCE_URL", "")
+SITE_URL = os.environ.get("SITE_URL", "https://forum.talksearch.io").rstrip("/")   # absolute links in feeds
 TALKSEARCH_API = os.environ.get("TALKSEARCH_API", "").rstrip("/")   # optional: ranked advanced search
 BOARD_DESCRIPTIONS = os.environ.get("BOARD_DESCRIPTIONS", "")        # optional JSON file {board id: text}
 BOARD_SEQUENCE = os.environ.get("BOARD_SEQUENCE", "")                # optional JSON list of board ids in display order
@@ -518,7 +519,9 @@ def _tag_html():
 TAG_HTML = _tag_html()
 
 
-def layout(title, body, q="", canonical="", noindex=False, active="", scripts=()):
+def layout(title, body, q="", canonical="", noindex=False, active="", scripts=(), feed=""):
+    if feed:   # a small visible link; feed readers also find it through the link element in the head
+        body = '<a class="feedlink" href="%s" title="Follow this page in a feed reader">Atom feed</a>' % e(feed) + body
     site_full = ("%s %s" % (SITE, SITE_TAG)).strip()
     full = "%s - %s" % (title, site_full) if title else site_full
 
@@ -570,7 +573,8 @@ def layout(title, body, q="", canonical="", noindex=False, active="", scripts=()
 </body>
 </html>
 """ % (e(full), e(full), e(site_full),
-       '<link rel="canonical" href="%s">\n' % e(canonical) if canonical else "",
+       ('<link rel="canonical" href="%s">\n' % e(canonical) if canonical else "")
+       + ('<link rel="alternate" type="application/atom+xml" title="Atom feed" href="%s">\n' % e(feed) if feed else ""),
        '<meta name="robots" content="noindex">\n' if noindex else "",
        ASSET_V, ASSET_V, ASSET_V, extra, e(SITE), TAG_HTML, e(q),
        tab("/", "Home", "boards"), tab("/search/posts", "Search", "search"), tab("/search/users", "Members", "members"),
@@ -755,7 +759,7 @@ def page_board(bid, q):
                ' <span class="sub">%s</span>' % e(desc) if desc else "",
                '<div class="pad small">%s</div>' % moderators_html(bid) if moderators_html(bid) else "", m_sort, heads,
                "".join(rows) or '<tr><td colspan="7" class="muted">No topics.</td></tr>', pg, buttons, capped))
-    return layout(name, body, active="boards", canonical=plain if page == 1 else "%s?page=%d" % (plain, page), noindex=not default_sort)
+    return layout(name, body, active="boards", canonical=plain if page == 1 else "%s?page=%d" % (plain, page), noindex=not default_sort, feed="/feed/boards/%d" % bid)
 
 
 # --------------------------------------------------------------------------- topics
@@ -889,7 +893,7 @@ def page_thread(tid, q):
             '<tbody>%s</tbody></table></div><div class="bar">%s%s</div>'
             % (crumbs_html(crumbs), poll_html(thread.get("poll"), tid) if page == 1 else "", pg, buttons, e(title), num(count),
                "".join(rows), pg, buttons))
-    return layout(title, body, active="boards", canonical=here)
+    return layout(title, body, active="boards", canonical=here, feed="/feed/threads/%d" % tid)
 
 
 # --------------------------------------------------------------------------- post edit history
@@ -1158,7 +1162,7 @@ def page_profile(name, q, sub=""):
             % (crumbs_html([("Members", "/search/users"), (uname, base)]), e(uname), dl, sig, avatar_html(u.get("avatar"), uname, 96),
                actions, "".join(extra), pg, e(uname),
                post_list(pd.get("posts") or [], show_author=False) if pd.get("posts") else '<p class="pad muted">No archived posts.</p>', pg))
-    return layout(uname, body, active="members", canonical=base if page == 1 else "%s?page=%d" % (base, page))
+    return layout(uname, body, active="members", canonical=base if page == 1 else "%s?page=%d" % (base, page), feed="/feed" + base)
 
 
 # --------------------------------------------------------------------------- statistics
@@ -1461,6 +1465,71 @@ def search_form(term, adv, q):
     return simple + advanced
 
 
+def adv_words(term, filters):
+    words = term
+    if filters.get("exact_phrase"):
+        words += ' "%s"' % filters["exact_phrase"].replace('"', " ")
+    if (filters.get("any_words") or "").split():
+        words += " (%s)" % " | ".join(w.strip('"|()') for w in filters["any_words"].split())
+    if (filters.get("without_words") or "").split():
+        words += " " + " ".join("-" + w.lstrip("-") for w in filters["without_words"].split())
+    return words.strip()
+
+
+FEED_ROUTE = re.compile(r"^/feed/(search|threads/(\d+)|boards/(\d+)|profile/([^/]+))/?$")
+
+
+def feed(path, q):
+    """Atom feed of the newest posts for a search, a topic, a board or a member (25 entries, cached 10 minutes)."""
+    m = FEED_ROUTE.match(path)
+    if not m:
+        raise NotFound()
+    def val(k):
+        return (q.get(k, [""])[0] or "").strip()[:200]
+    params = {"limit": 25, "page": 1, "sort": "newest"}
+    if m.group(2):
+        params["topic_id"] = m.group(2); link = "/threads/%s" % m.group(2); title = "Topic %s" % m.group(2)
+    elif m.group(3):
+        fb = forum()["boards"]
+        b = fb.get(int(m.group(3))) or fb.get(m.group(3))
+        if not b:
+            raise NotFound()
+        params["board_id"] = m.group(3); link = "/boards/%s" % m.group(3); title = "Board: %s" % b["name"]
+    elif m.group(4):
+        name = urllib.parse.unquote(m.group(4))
+        api("/api/users/%s" % urllib.parse.quote(name, safe=""), ttl=600)      # 404 for an unknown member
+        params["author"] = name; link = "/profile/%s" % urllib.parse.quote(name, safe=""); title = "Posts by %s" % name
+    else:
+        words = adv_words(val("search"), {k: val(k) for k in ("exact_phrase", "any_words", "without_words")})
+        for k in ("board_id", "author", "date_from", "date_to", "min_merit", "starters"):
+            if val(k):
+                params[k] = val(k)
+        if not words and len(params) == 3:
+            raise NotFound()
+        params["search"] = words
+        link = "/search/posts?" + urllib.parse.urlencode(dict({k: v for k, v in params.items() if k not in ("limit", "page", "sort")}, adv="1"))
+        title = "Search: %s" % (words or "filtered posts")
+    posts = api("/api/search/posts", params, ttl=600).get("posts") or []
+    if m.group(2) and posts:
+        title = clean_title(posts[0].get("thread_title")) or title
+    x = html.escape
+    def iso(p):
+        d = parse_dt(p.get("created_at"))
+        return d.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if d else "1970-01-01T00:00:00Z"
+    entries = []
+    for p in posts:
+        url = "%s/threads/%s?post=%s#%s" % (SITE_URL, p.get("thread_id"), p.get("id"), p.get("id"))
+        who = (p.get("user") or {}).get("username") or "unknown"
+        entries.append("<entry><id>%s</id><title>%s</title><link href=\"%s\"/><updated>%s</updated><author><name>%s</name></author>"
+                       "<summary>%s</summary></entry>" % (x(url), x(clean_title(p.get("thread_title")) or "Post %s" % p.get("id")), x(url), iso(p), x(who),
+                                                       x(excerpt(p.get("body_html"), 600))))
+    return ('<?xml version="1.0" encoding="utf-8"?>\n<feed xmlns="http://www.w3.org/2005/Atom"><id>%s</id><title>%s - %s</title>'
+            '<link href="%s"/><link rel="self" href="%s"/><updated>%s</updated>%s</feed>'
+            % (x(SITE_URL + path + ("?" + urllib.parse.urlencode({k: val(k) for k in q if val(k)}) if q else "")), x(title), x(SITE), x(SITE_URL + link),
+               x(SITE_URL + path + ("?" + urllib.parse.urlencode({k: val(k) for k in q if val(k)}) if q else "")),
+               iso(posts[0]) if posts else time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "".join(entries)))
+
+
 def page_search_posts(q):
     term = (q.get("search", q.get("q", [""]))[0] or "").strip()[:200]
     adv = bool(q.get("adv"))
@@ -1502,7 +1571,8 @@ def page_search_posts(q):
         res = post_list(posts) if posts else '<p class="pad muted">No posts match. Try fewer words or fewer filters.</p>'
         body = ('%s%s<div class="bar">%s</div><div class="tb"><h2 class="catbg">%s result%s%s</h2>%s</div><div class="bar">%s</div>'
                 % (head, note, pg, num(count), "" if count == 1 else "s", " (%s)" % e(data["note"]) if data.get("note") else "", res, pg))
-        return layout("Search: %s" % (term or "filtered"), body, q=term, noindex=True, active="search")
+        return layout("Search: %s" % (term or "filtered"), body, q=term, noindex=True, active="search",
+                      feed="/feed/search?" + urllib.parse.urlencode({k: v for k, v in keep.items() if k not in ("adv", "sort") and v}))
     if (page - 1) * PER_PAGE >= MAX_WINDOW:
         page = MAX_WINDOW // PER_PAGE
     data = api("/api/search/posts", {"search": term, "limit": PER_PAGE, "page": page}, ttl=30)
@@ -1522,7 +1592,7 @@ def page_search_posts(q):
     res = post_list(posts, titles) if posts else '<p class="pad muted">No posts match. Try fewer or different words.</p>'
     body = ('%s<div class="bar">%s</div><div class="tb"><h2 class="catbg">%s result%s for “%s”</h2>%s</div><div class="bar">%s</div>'
             % (head, pg, num(count), "" if count == 1 else "s", e(term), res, pg))
-    return layout("Search: %s" % term, body, q=term, noindex=True, active="search")
+    return layout("Search: %s" % term, body, q=term, noindex=True, active="search", feed="/feed/search?" + urllib.parse.urlencode({"search": term}))
 
 
 def sanitize_light(content):
@@ -1683,6 +1753,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._image(im)
             if path in ("/favicon.ico", "/robots.txt", "/apple-touch-icon.png", "/apple-touch-icon-precomposed.png"):
                 return self._static("apple-touch-icon.png" if path.startswith("/apple") else path[1:])
+            if path.startswith("/feed/"):
+                return self._send(200, feed(path, q), "application/atom+xml; charset=utf-8", "public, max-age=600")
             if path.startswith("/api/"):
                 return self._proxy_api()
             sm = SEEN_ROUTE.match(path)

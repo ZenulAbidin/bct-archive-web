@@ -158,6 +158,7 @@ details.merited > summary::-webkit-details-marker { display: none; }
 .diff ins { text-decoration: none; background: color-mix(in srgb, var(--pos) 22%, transparent); }
 .diff del { background: color-mix(in srgb, var(--neg) 20%, transparent); }
 .grid2 label.chk { display: flex; align-items: center; gap: 6px; font-weight: normal; align-self: end; } .grid2 label.chk input { width: auto; height: auto; }
+.feedlink { float: right; font-size: 11px; margin: 3px 4px 0 8px; } @media print { .feedlink { display: none; } }
 /* moderation log */
 .mlf { padding: 8px 10px 0; }
 .modlog td { vertical-align: top; } .modlog .mt { white-space: nowrap; width: 1%; } .modlog .ma { white-space: nowrap; width: 1%; font-weight: bold; }
