@@ -157,6 +157,7 @@ details.merited > summary::-webkit-details-marker { display: none; }
 .diff { white-space: pre-wrap; overflow-wrap: anywhere; padding: 6px 0 2px; font-size: 13px; }
 .diff ins { text-decoration: none; background: color-mix(in srgb, var(--pos) 22%, transparent); }
 .diff del { background: color-mix(in srgb, var(--neg) 20%, transparent); }
+.grid2 label.chk { display: flex; align-items: center; gap: 6px; font-weight: normal; align-self: end; } .grid2 label.chk input { width: auto; height: auto; }
 /* moderation log */
 .mlf { padding: 8px 10px 0; }
 .modlog td { vertical-align: top; } .modlog .mt { white-space: nowrap; width: 1%; } .modlog .ma { white-space: nowrap; width: 1%; font-weight: bold; }

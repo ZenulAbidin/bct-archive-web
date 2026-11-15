@@ -1430,8 +1430,6 @@ def search_form(term, adv, q):
     simple = ('<form class="sform" action="/search/posts" method="get" role="search"><p><label for="bq"><b>Search for</b></label><br>'
               '<span class="row"><input id="bq" name="search" type="search" value="%s" required><button class="btn primary" type="submit">Search</button></span></p>'
               '<p class="small muted">Matches words in posts and topic titles. "quotes" for exact phrases, -word to exclude.</p></form>' % e(term))
-    if not TALKSEARCH_API:
-        return simple
     boards = forum()["boards"]
     opts = "".join('<option value="%s"%s>%s%s</option>' % (b["id"], " selected" if val("board_id") == str(b["id"]) else "",
                                                            "- " * max(0, len(b["segs"]) - 2), e(b["name"])) for b in boards.values())
@@ -1442,7 +1440,7 @@ def search_form(term, adv, q):
                 '<input id="f-%s" name="%s" type="date" min="2009-11-22" max="%s" value="%s">'
                 '<button type="button" class="btn dclr" data-clear="f-%s" hidden>Clear</button></span></div>'
                 % (name, label, name, name, time.strftime("%%Y-%%m-%%d", time.gmtime(time.time() + 86400)), val(name), name))
-    advanced = ('<details class="adv"%s><summary><b>Advanced search</b> (ranked by TalkSearch)</summary>'
+    advanced = ('<details class="adv"%s><summary><b>Advanced search</b> (filters, merit, order)</summary>'
                 '<form class="sform grid2" action="/search/posts" method="get"><input type="hidden" name="adv" value="1">'
                 '<label>All of these words<input name="search" type="search" value="%s"></label>'
                 '<label>This exact phrase<input name="exact_phrase" value="%s"></label>'
@@ -1451,47 +1449,60 @@ def search_form(term, adv, q):
                 '<label>By member<input name="author" value="%s" autocomplete="off"></label>'
                 '<label>In board<select name="board_id"><option value="">All boards</option>%s</select></label>'
                 '%s%s'
+                '<label>Merit of at least<input name="min_merit" type="number" min="0" max="10000" inputmode="numeric" value="%s"></label>'
+                '<label>Order<select name="sort">%s</select></label>'
+                '<label class="chk"><input type="checkbox" name="starters" value="1"%s> Only the first post of each topic</label>'
                 '<p><button class="btn primary" type="submit">Search</button></p></form></details>'
                 % (" open" if adv else "", e(term), val("exact_phrase"), val("any_words"), val("without_words"), val("author"),
-                   opts, date_field("date_from", "From date"), date_field("date_to", "To date")))
+                   opts, date_field("date_from", "From date"), date_field("date_to", "To date"), val("min_merit"),
+                   "".join('<option value="%s"%s>%s</option>' % (k, " selected" if val("sort") == k else "", v)
+                           for k, v in (("", "Best match"), ("merit", "Most merit first"), ("newest", "Newest first"), ("oldest", "Oldest first"))),
+                   " checked" if val("starters") else ""))
     return simple + advanced
 
 
 def page_search_posts(q):
     term = (q.get("search", q.get("q", [""]))[0] or "").strip()[:200]
-    adv = bool(q.get("adv")) and bool(TALKSEARCH_API)
+    adv = bool(q.get("adv"))
     page = max(1, int(q.get("page", ["1"])[0] or 1))
     head = '%s<div class="tb"><h1 class="catbg">Search</h1><div class="pad">%s</div></div>' % (
         crumbs_html([("Search", "/search/posts")]), search_form(term, adv, q))
-    filters = {k: (q.get(k, [""])[0] or "").strip()[:200] for k in ("exact_phrase", "any_words", "without_words", "author", "board_id", "date_from", "date_to")}
-    if not term and not (adv and any(filters.values())):
+    filters = {k: (q.get(k, [""])[0] or "").strip()[:200] for k in ("exact_phrase", "any_words", "without_words")}
+    extra = {k: (q.get(k, [""])[0] or "").strip()[:200] for k in ("author", "board_id", "date_from", "date_to", "min_merit", "sort", "starters")}
+    if not term and not (adv and (any(filters.values()) or any(extra.values()))):
         return layout("Search", head, active="search", canonical="/search/posts")
     if adv:
-        params = {"q": term or filters["exact_phrase"] or filters["any_words"] or "*", "size": 50}
-        for k in ("exact_phrase", "any_words", "without_words", "date_from", "date_to"):
-            if filters[k]:
-                params[k] = filters[k]
-        if filters["board_id"].isdigit():
-            params["board_id"] = filters["board_id"]
+        words = term
+        if filters["exact_phrase"]:
+            words += ' "%s"' % filters["exact_phrase"].replace('"', " ")
+        if filters["any_words"].split():
+            words += " (%s)" % " | ".join(w.strip('"|()') for w in filters["any_words"].split())
+        if filters["without_words"].split():
+            words += " " + " ".join("-" + w.lstrip("-") for w in filters["without_words"].split())
+        params = {"search": words.strip(), "limit": PER_PAGE, "page": page}
+        for k in ("board_id", "author", "date_from", "date_to", "min_merit", "sort", "starters"):
+            if extra[k]:
+                params[k] = extra[k]
         note = ""
-        if filters["author"]:
+        if extra["author"]:
             try:
-                params["author_uid"] = api("/api/users/%s" % urllib.parse.quote(filters["author"], safe=""), ttl=600)["id"]
+                api("/api/users/%s" % urllib.parse.quote(extra["author"], safe=""), ttl=600)
             except NotFound:
-                note = '<p class="warn">No member is called “%s”; showing results from everyone.</p>' % e(filters["author"])
-        try:
-            with urllib.request.urlopen(TALKSEARCH_API + "/advanced-search?" + urllib.parse.urlencode(params), timeout=45) as r:
-                data = json.loads(r.read().decode("utf-8"))
-        except Exception:
-            raise Upstream("talksearch")
-        hits = data.get("hits") or []
-        for h in hits:
-            h["content"] = sanitize_light(h.get("content"))
-        res = post_list(hits) if hits else '<p class="pad muted">No posts match.</p>'
-        body = ('%s%s<div class="tb"><h2 class="catbg">Top %s of %s results, ranked by TalkSearch</h2>%s</div>'
-                '<p class="small muted">For more options and paging use %s.</p>'
-                % (head, note, num(len(hits)), num(data.get("total")), res, act("https://talksearch.io", "TalkSearch")))
-        return layout("Search: %s" % term, body, q=term, noindex=True, active="search")
+                note = '<p class="warn">No member is called “%s”.</p>' % e(extra["author"])
+        if (page - 1) * PER_PAGE >= MAX_WINDOW:
+            page = params["page"] = MAX_WINDOW // PER_PAGE
+        data = api("/api/search/posts", params, ttl=60)
+        posts = data.get("posts") or []
+        count = int(data.get("count") or 0)
+        pages = max(1, min(math.ceil(count / PER_PAGE), MAX_WINDOW // PER_PAGE))
+        keep = dict({k: v for k, v in filters.items() if v}, **{k: v for k, v in extra.items() if v})
+        keep.update(adv="1", search=term)
+        qs = urllib.parse.urlencode(keep)
+        pg = pager("/search/posts?" + e(qs), page, pages, "Search result pages")
+        res = post_list(posts) if posts else '<p class="pad muted">No posts match. Try fewer words or fewer filters.</p>'
+        body = ('%s%s<div class="bar">%s</div><div class="tb"><h2 class="catbg">%s result%s%s</h2>%s</div><div class="bar">%s</div>'
+                % (head, note, pg, num(count), "" if count == 1 else "s", " (%s)" % e(data["note"]) if data.get("note") else "", res, pg))
+        return layout("Search: %s" % (term or "filtered"), body, q=term, noindex=True, active="search")
     if (page - 1) * PER_PAGE >= MAX_WINDOW:
         page = MAX_WINDOW // PER_PAGE
     data = api("/api/search/posts", {"search": term, "limit": PER_PAGE, "page": page}, ttl=30)
