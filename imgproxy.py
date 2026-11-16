@@ -23,11 +23,13 @@ import http.client
 import json
 import ipaddress
 import os
+import re
 import socket
 import ssl
 import threading
 import time
 import urllib.parse
+import urllib.request
 
 MAX_BYTES = 8 * 1024 * 1024
 TIMEOUT = 10
@@ -35,6 +37,12 @@ NEGATIVE_TTL = 24 * 3600
 UA = "Mozilla/5.0 (compatible; archive-image-cache)"
 SECRET = (os.environ.get("IMG_SECRET") or base64.b16encode(os.urandom(16)).decode()).encode()
 CACHE = os.environ.get("IMG_CACHE", "")
+# TalkSearch's own media cache (loopback service). When it already holds a picture, that copy
+# is served and the original host is not contacted at all.
+MEDIA = os.environ.get("MEDIA_CACHE", "").rstrip("/")
+MEDIA_MAX_BYTES = 25 * 1024 * 1024
+_MEDIA_PATH = re.compile(r"/media/images/[0-9a-f]{64}(\.[a-z0-9]+)?")
+_local = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 _slots = threading.BoundedSemaphore(8)
 _ctx = ssl.create_default_context()
 _TYPES = {"png": "image/png", "jpg": "image/jpeg", "gif": "image/gif", "webp": "image/webp"}
@@ -162,14 +170,42 @@ def fetch(url, hops=0):
     return kind, data
 
 
+def media_lookup(url):
+    """(content_type, bytes) from the TalkSearch media cache, or None. It keeps still pictures
+    only (AVIF), so addresses that look like GIFs are left to the normal path, which keeps
+    animations."""
+    if not MEDIA:
+        return None
+    wanted = [c for c in url.split("\n")[:2]
+              if not urllib.parse.urlsplit(original(c)).path.lower().endswith(".gif")]
+    if not wanted:
+        return None
+    try:
+        ask = urllib.request.Request(MEDIA + "/media/resolve", data=json.dumps({"urls": wanted}).encode(),
+                                     headers={"Content-Type": "application/json"})
+        with _local.open(ask, timeout=3) as r:
+            found = json.load(r).get("paths") or {}
+        for path in found.values():
+            if not isinstance(path, str) or not _MEDIA_PATH.fullmatch(path):
+                continue
+            with _local.open(MEDIA + path, timeout=5) as r:
+                data = r.read(MEDIA_MAX_BYTES + 1)
+            if len(data) <= MEDIA_MAX_BYTES and data[4:12] in (b"ftypavif", b"ftypavis"):
+                return "image/avif", data
+    except Exception:
+        pass
+    return None
+
+
 def _paths(url):
     key = hashlib.sha256(url.encode("utf-8", "surrogatepass")).hexdigest()
     d = os.path.join(CACHE, key[:2])
     return d, os.path.join(d, key)
 
 
-def get(url):
-    """(content_type, bytes) from the cache or the network; None if it cannot be served."""
+def get(url, avif=False):
+    """(content_type, bytes) from the cache or the network; None if it cannot be served.
+    `avif`: the reader's browser said it shows AVIF, so a copy from the media cache may be used."""
     if CACHE:
         d, base = _paths(url)
         for kind, ctype in _TYPES.items():
@@ -178,6 +214,11 @@ def get(url):
                     return ctype, f.read()
             except OSError:
                 pass
+    if avif:
+        got = media_lookup(url)
+        if got:
+            return got
+    if CACHE:
         try:
             if time.time() - os.path.getmtime(base + ".neg") < NEGATIVE_TTL:
                 return None

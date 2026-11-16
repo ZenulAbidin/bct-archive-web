@@ -1730,11 +1730,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def _image(self, m):
         url = imgproxy.decode(m.group(1), m.group(2))
-        got = imgproxy.get(url) if url else None
+        got = imgproxy.get(url, avif="image/avif" in (self.headers.get("Accept") or "")) if url else None
         if not got:
-            return self._send(404, b"", "text/plain; charset=utf-8", "public, max-age=3600")
+            return self._send(404, b"", "text/plain; charset=utf-8", "public, max-age=3600", {"Vary": "Accept"})
         self._send(200, got[1], got[0], "public, max-age=2592000, immutable",
-                   {"Content-Security-Policy": "default-src 'none'; sandbox", "Content-Disposition": "inline"})
+                   {"Content-Security-Policy": "default-src 'none'; sandbox", "Content-Disposition": "inline", "Vary": "Accept"})
 
     def _proxy_api(self):
         try:
