@@ -208,6 +208,8 @@ textarea#msg { width: 100%; min-height: 220px; font: 13px/1.4 var(--mono); resiz
   .q { flex: 1 1 100%; }
   .q input, .q button, .btn, .jump input, .jump button { height: 32px; }
   .tabs a, .tabs button { padding: 9px 9px; }
+  .tabs a, .tabs button { flex: 1 1 auto; text-align: center; }
+  .tabs button { margin-left: 0; border-left: 0; }
   .boards .stats, .boards .last, .topics .starter, .topics .n, .topics .last, .topics thead { display: none; }
   .m-stats, .m-last { display: block; }
   .ic { width: 36px; } .grid td.ic { padding: 5px 2px; } .bi { width: 24px; height: 24px; }
