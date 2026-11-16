@@ -136,8 +136,8 @@ details.merited > summary::-webkit-details-marker { display: none; }
 .quote .quote { background: var(--win2); }
 .code { font-family: var(--mono); background: var(--code); border-color: var(--line); overflow: auto; max-height: 24em; white-space: pre-wrap; }
 .sig { margin-top: 8px; padding-top: 4px; border-top: 1px solid var(--line); font: 13px/1.3 verdana, sans-serif; --pt: 1.3333px; color: var(--muted); box-sizing: border-box; max-height: 42px; overflow: hidden; }
-.sig:not(.full) img { max-height: 37px; width: auto; vertical-align: bottom; }
-.sig.full { max-height: none; margin: 0; padding: 0; border: 0; overflow-x: auto; }
+.sig img { max-height: 37px; width: auto; vertical-align: bottom; }
+.sig.prof { margin: 0; padding: 0; border: 0; width: 0; min-width: 100%; }   /* takes the cell width, never widens it */
 .sig table { border-collapse: collapse; } .grid .sig td, .kv .sig td { padding: 0 2px; border: 0; background: none; }
 .sig a { text-decoration: none; }
 .sig table, .sigin > div { white-space: nowrap; }
@@ -225,6 +225,8 @@ textarea#msg { width: 100%; min-height: 220px; font: 13px/1.4 var(--mono); resiz
   /* signatures: long words and links wrap; a banner wider than the screen is scaled down by app.js, and can be
      scrolled sideways when scripts are off */
   .sig { overflow-wrap: anywhere; }
+  .kv tr.sigrow > th, .kv tr.sigrow > td { display: block; width: auto; }   /* the signature gets the full width */
+  .kv tr.sigrow .sig.prof { width: calc(100vw - 56px); min-width: 0; }
   .acts { justify-content: flex-start; gap: 6px 14px; } .acts a, .ulinks a { padding: 3px 0; }
   /* 16px keeps phones from zooming into a field, and the taller boxes are easier to hit */
   .sform input, .sform select { font-size: 16px; } .grid2 input, .grid2 select, .row input, .dt .dclr { height: 40px; } .row .btn { height: 40px; }

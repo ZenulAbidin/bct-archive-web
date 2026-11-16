@@ -66,12 +66,12 @@
     c.addEventListener('click', function () { f.value = ''; show(); });
     show();
   });
-  // 9. Signatures in posts never take more than 42px of height. One that needs more (several lines, a banner
+  // 9. Signatures (posts and profiles) never take more than 42px of height. One that needs more (several lines, a banner
   // table, block art) is drawn smaller as a whole, so all of it stays visible; links keep working.
   function fitSigs() {
     document.querySelectorAll('.sig').forEach(function (s) {
       var i = s.firstElementChild;
-      if (!i || !i.classList.contains('sigin') || s.classList.contains('full')) return;
+      if (!i || !i.classList.contains('sigin')) return;
       i.style.transform = i.style.width = i.style.maxWidth = s.style.height = '';
       s.classList.remove('fit');
       var cs = getComputedStyle(s);

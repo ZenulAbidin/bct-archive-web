@@ -1158,7 +1158,7 @@ def page_profile(name, q, sub=""):
         extra.append('<details class="tb"><summary class="titlebg">Posting statistics (from the archive)</summary><div class="two">'
                      '<table class="pollt"><caption>Most active boards</caption><tbody>%s</tbody></table>'
                      '<table class="pollt"><caption>Posts per year</caption><tbody>%s</tbody></table></div></details>' % (brow, yrow))
-    sig = ('<tr><th scope="row">Signature:</th><td><div class="sig full"><div class="sigin">%s</div></div></td></tr>' % balanced(u["signature"], tight=True)
+    sig = ('<tr class="sigrow"><th scope="row">Signature:</th><td><div class="sig prof"><div class="sigin">%s</div></div></td></tr>' % balanced(u["signature"], tight=True)
            if u.get("signature") else "")
     pg = pager(base, page, pages, "Post history pages")
     body = ('%s<div class="tb"><h1 class="catbg">Summary - %s</h1><div class="summary"><table class="kv"><tbody>%s%s</tbody></table>'
