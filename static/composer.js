@@ -12,7 +12,7 @@
     var d = {};
     try { d = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) {}
     msg.value = d.msg || '';
-    if (subject) subject.value = d.subject || '';
+    if (subject) subject.value = d.subject || subject.defaultValue;
     if (prefill && msg.value.indexOf(prefill.trim()) === -1) msg.value += (msg.value ? '\n' : '') + prefill;
   }
   function save() {
@@ -121,13 +121,17 @@
     });
   });
   document.getElementById('go').addEventListener('click', function () {
-    var w = window.open(target, 'bitcointalk', 'popup=yes,width=1000,height=760');
+    // The subject goes along in the address of the Bitcointalk form (their page, not this site). If their form
+    // does not take it, the reminder below and the "Copy subject" button cover it.
+    var sub = subject ? subject.value.trim() : '', changed = sub && sub !== subject.defaultValue;
+    var w = window.open(target + (changed ? ';subject=' + encodeURIComponent(sub) : ''), 'bitcointalk', 'popup=yes,width=1000,height=760');
     copy(msg.value).then(function () {
-      say(w ? 'Copied. Paste your message in the Bitcointalk window and press Post.' : 'Copied. Your browser blocked the window; open Bitcointalk and paste.');
+      var extra = changed ? ' Check that the Subject box there says: ' + sub : '';
+      say((w ? 'Copied. Paste your message in the Bitcointalk window and press Post.' : 'Copied. Your browser blocked the window; open Bitcointalk and paste.') + extra);
     }, function () { say('Could not copy automatically; select the text, copy it, then paste it on Bitcointalk.'); });
   });
   document.getElementById('clear').addEventListener('click', function () {
-    msg.value = ''; if (subject) subject.value = '';
+    msg.value = ''; if (subject) subject.value = subject.defaultValue;
     try { localStorage.removeItem(key); } catch (e) {}
     update(); say('Draft cleared.');
   });

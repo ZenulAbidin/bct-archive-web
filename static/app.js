@@ -66,41 +66,35 @@
     c.addEventListener('click', function () { f.value = ''; show(); });
     show();
   });
-  // 9. Phones: a signature wider than the screen (banner tables, block art, wide pictures) is scaled down to fit.
-  var narrow = window.matchMedia('(max-width: 720px)');
+  // 9. Signatures in posts never take more than 42px of height. One that needs more (several lines, a banner
+  // table, block art) is drawn smaller as a whole, so all of it stays visible; links keep working.
   function fitSigs() {
     document.querySelectorAll('.sig').forEach(function (s) {
       var i = s.firstElementChild;
-      if (!i || !i.classList.contains('sigin')) return;
-      i.style.transform = i.style.width = s.style.height = '';
-      s.classList.remove('fit', 'min');
-      if (!narrow.matches) return;
-      var room = s.clientWidth, need = i.scrollWidth;
-      if (!room) return;
-      var cs = getComputedStyle(s), k;
+      if (!i || !i.classList.contains('sigin') || s.classList.contains('full')) return;
+      i.style.transform = i.style.width = i.style.maxWidth = s.style.height = '';
+      s.classList.remove('fit');
+      var cs = getComputedStyle(s);
+      var room = s.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
       var edge = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
-      var cap = parseFloat(cs.maxHeight);   // the usual limit on a signature's height, kept in proportion
-      // Banners (tables, block art, pictures) get squeezed by a narrow column: their cells stack and most of the
-      // banner ends up below the height limit. Those are laid out at their natural width instead, then scaled.
-      var banner = i.querySelector('table, pre, tt, img') && cap && i.offsetHeight > cap - edge + 1;
-      if (need <= room + 1 && !banner) return;
-      if (banner) {
-        i.style.width = 'max-content';
-        need = Math.max(room, Math.min(i.offsetWidth, 900));
-      }
-      for (var n = 0; n < 6; n++) {
-        i.style.width = need + 'px';
-        if (i.scrollWidth <= need + 1) break;
-        need = i.scrollWidth;
-      }
-      if (need <= room + 1) { i.style.width = ''; return; }
-      k = Math.max(room / need, 0.3);
+      var avail = 42 - edge;
+      if (room <= 0) return;
+      if (i.offsetHeight <= avail && i.scrollWidth <= room + 1) return;
+      // Try the signature at several layout widths (a wider layout has fewer lines) and keep the one that
+      // ends up largest once it is scaled to fit both the column width and the height limit.
+      var best = null;
+      [1, 1.25, 1.5, 2, 2.5, 3, 4, 6, 9].forEach(function (m) {
+        i.style.width = 'max-content'; i.style.maxWidth = Math.round(room * m) + 'px';
+        var w = Math.max(i.offsetWidth, i.scrollWidth), h = i.offsetHeight;
+        var k = Math.min(1, room / w, avail / h);
+        if (!best || k > best.k + 0.005) best = { k: k, m: m, w: w, h: h };
+      });
+      i.style.maxWidth = Math.round(room * best.m) + 'px';
+      i.style.width = (best.w + 1) + 'px';
+      var k = Math.min(best.k, room / (best.w + 1), avail / i.offsetHeight);   // measured again at the final width
       i.style.transform = 'scale(' + k + ')';
-      var h = i.offsetHeight;
-      if (cap) h = Math.min(h, cap - edge);
-      s.style.height = Math.ceil(h * k + edge) + 'px';
+      s.style.height = Math.min(42, Math.ceil(i.offsetHeight * k + edge)) + 'px';
       s.classList.add('fit');
-      if (room / need < 0.3) s.classList.add('min');
     });
   }
   if (document.querySelector('.sig')) {

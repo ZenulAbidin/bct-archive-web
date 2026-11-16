@@ -135,7 +135,8 @@ details.merited > summary::-webkit-details-marker { display: none; }
 .quote, .code { margin: 1px 0 8px; padding: 5px 7px; border: 1px solid var(--quote-line); border-left-width: 3px; background: var(--quote); font-size: 12px; }
 .quote .quote { background: var(--win2); }
 .code { font-family: var(--mono); background: var(--code); border-color: var(--line); overflow: auto; max-height: 24em; white-space: pre-wrap; }
-.sig { margin-top: 8px; padding-top: 4px; border-top: 1px solid var(--line); font: 13px/1.3 verdana, sans-serif; --pt: 1.3333px; color: var(--muted); max-height: calc(4em + 7px); overflow: hidden; }
+.sig { margin-top: 8px; padding-top: 4px; border-top: 1px solid var(--line); font: 13px/1.3 verdana, sans-serif; --pt: 1.3333px; color: var(--muted); box-sizing: border-box; max-height: 42px; overflow: hidden; }
+.sig:not(.full) img { max-height: 37px; width: auto; vertical-align: bottom; }
 .sig.full { max-height: none; margin: 0; padding: 0; border: 0; overflow-x: auto; }
 .sig table { border-collapse: collapse; } .grid .sig td, .kv .sig td { padding: 0 2px; border: 0; background: none; }
 .sig a { text-decoration: none; }
@@ -223,7 +224,7 @@ textarea#msg { width: 100%; min-height: 220px; font: 13px/1.4 var(--mono); resiz
   .posts td.msg { border-left: 0; padding: 6px 8px 8px; }
   /* signatures: long words and links wrap; a banner wider than the screen is scaled down by app.js, and can be
      scrolled sideways when scripts are off */
-  .sig { overflow-wrap: anywhere; overflow-x: auto; overflow-y: hidden; } .sig.fit { overflow-x: hidden; } .sig.fit.min { overflow-x: auto; }
+  .sig { overflow-wrap: anywhere; }
   .acts { justify-content: flex-start; gap: 6px 14px; } .acts a, .ulinks a { padding: 3px 0; }
   /* 16px keeps phones from zooming into a field, and the taller boxes are easier to hit */
   .sform input, .sform select { font-size: 16px; } .grid2 input, .grid2 select, .row input, .dt .dclr { height: 40px; } .row .btn { height: 40px; }
@@ -250,6 +251,7 @@ textarea#msg { width: 100%; min-height: 220px; font: 13px/1.4 var(--mono); resiz
 .ulinks .pm { display: inline-flex; align-items: center; } .pmi { display: block; }
 @media (max-width: 760px) { .utrust { margin: 0; } }
 .golast { float: right; margin: 1px 0 2px 6px; color: var(--muted); line-height: 0; } .golast:hover { color: var(--link); }
+.m-last .lp { display: block; max-width: calc(100vw - 64px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .m-last .golast { float: none; display: inline-block; vertical-align: -3px; margin: 0 0 0 2px; }
 .poll .pollt td.pl { overflow-wrap: anywhere; } .poll .pollt td.n { white-space: nowrap; text-align: right; width: 1%; }
 .poll .pnote { margin: 6px 0; } .poll .btns { margin: 6px 0 2px; }

@@ -600,11 +600,16 @@ def moderators_html(bid):
 
 
 def board_row(n, boards):
-    last = '<span class="muted">No posts</span>'
+    last, m_last = '<span class="muted">No posts</span>', ""
     if n.get("last_thread_id"):
-        last = ('%s<b>Last post</b> by %s<br>in <a href="/threads/%s?last=1">%s</a><br>on %s'
-                % (go_last(n["last_thread_id"]), user_link(n.get("last_post_username")), n["last_thread_id"],
-                   e(clean_title(n.get("last_thread_title"))), when(n.get("last_post_created_at"))))
+        tid = n["last_thread_id"]
+        # the last post's own subject ("Re: ..." for a reply), linked to that post
+        href = "/threads/%s?post=%s" % (tid, n["last_post_id"]) if n.get("last_post_id") else "/threads/%s?last=1" % tid
+        title = e((n.get("last_thread_title") or "").strip() or "(untitled)")
+        last = ('%s<b>Last post</b> by %s<br>in <a href="%s">%s</a><br>on %s'
+                % (go_last(tid), user_link(n.get("last_post_username")), href, title, when(n.get("last_post_created_at"))))
+        m_last = ('<div class="m-last"><div class="lp"><span>Last post by %s in</span> <a class="lt" href="%s" title="%s">%s</a></div>%s %s</div>'
+                  % (user_link(n.get("last_post_username")), href, title, title, when(n.get("last_post_created_at")), go_last(tid)))
     kids = ""
     if n["kids"]:
         kids = '<div class="kids"><b>Child Boards</b>: %s</div>' % ", ".join(
@@ -618,8 +623,7 @@ def board_row(n, boards):
             % (ICON_BOARD % ("new" if new else "", "New posts in the last day" if new else "No new posts in the last day"),
                n["id"], e(n["name"]), ('<div class="desc">%s</div>' % e(desc) if desc else "") + mods, kids,
                num(n.get("post_count")), num(n.get("thread_count")),
-               '<div class="m-last">Last post by %s, %s %s</div>' % (user_link(n.get("last_post_username")), when(n.get("last_post_created_at")), go_last(n["last_thread_id"]))
-               if n.get("last_thread_id") else "",
+               m_last,
                num(n.get("post_count")), num(n.get("thread_count")), last))
 
 
@@ -1018,7 +1022,7 @@ def page_compose(q):
             d = parse_dt(p.get("created_at"))
             prefill = bbcode.quote_block((p.get("user") or {}).get("username") or "", p.get("thread_id") or tid, p["id"],
                                          int(d.timestamp()) if d else 0, p.get("body_html"))
-        subject = ""
+        subject_value = ("Re: " + title)[:80]
     elif bid.isdigit():
         node = forum()["boards"].get(int(bid))
         if not node:
@@ -1026,10 +1030,11 @@ def page_compose(q):
         target = bct("action=post;board=%s.0" % bid)
         key, heading = "topic-%s" % bid, "New topic in: %s" % node["name"]
         crumbs = board_trail(int(bid)) + [("New topic", None)]
-        subject = ('<p><label for="subject"><b>Subject</b></label><br><span class="row"><input id="subject" type="text" maxlength="80">'
-                   '<button type="button" class="btn" data-copy="subject">Copy subject</button></span></p>')
+        subject_value = ""
     else:
         raise NotFound()
+    subject = ('<p><label for="subject"><b>Subject</b></label><br><span class="row"><input id="subject" type="text" maxlength="80" value="%s">'
+               '<button type="button" class="btn" data-copy="subject">Copy subject</button></span></p>' % e(subject_value))
     tools = "".join('<button type="button" data-tag="%s" title="%s" aria-label="%s">%s</button>' % (t, e(tip), e(tip), _TOOL_ICON % TOOL_ICONS[t])
                     for t, tip in (
         ("b", "Bold"), ("i", "Italic"), ("u", "Underline"), ("s", "Strikethrough"), ("quote", "Quote"), ("code", "Code"),
@@ -1052,7 +1057,7 @@ def page_compose(q):
             '<button type="button" class="btn" id="clear">Clear draft</button><span id="status" role="status" class="small"></span></p>'
             '<p class="small muted">Your draft is kept only in this browser. The text you type here is not sent to this site, and this site never asks for '
             'your Bitcointalk login. Pressing the first button copies the message and opens the real form on bitcointalk.org in a new window: '
-            '<b>paste your message there and press Post.</b></p>'
+            '<b>paste your message there and press Post.</b> If you changed the subject, check the Subject box there before posting.</p>'
             '</div></div>'
             % (crumbs_html(crumbs), e(heading), e(key), e(target), act(target, "write directly on bitcointalk.org"),
                subject, tools, uploader, e(prefill)))
