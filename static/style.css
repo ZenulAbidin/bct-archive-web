@@ -7,7 +7,7 @@
 :root {
   --bg: #e8e4dd; --win: #f3efe8; --win2: #fbf9f5; --text: #1f1a14; --muted: #5c5246;
   --line: #bdb4a6; --link: #96450a; --link-hover: #5f2b00; --visited: #7a4a2a;
-  --brand: #f7931a; --brand-2: #e58208; --on-brand: #2a1500;
+  --brand: #f7931a; --brand-2: #e58208; --on-brand: #2a1500; --hl: #fff0cf;
   --cat: #b4500a; --cat-2: #9c4306; --on-cat: #ffffff; --cat-line: #6e2f03;
   --title: #f1e2cd; --title-line: #d3bd9f; --quote: #fffaf0; --quote-line: #d8a86a; --code: #f6f1e7;
   --pos: #1c6b2c; --neg: #b3261e; --focus: #7a3300; --icon-off: #a9a093; --icon-on: #e07d08;
@@ -16,7 +16,7 @@
 :root[data-theme="dark"] {
   --bg: #14110e; --win: #1e1a16; --win2: #24201b; --text: #ece5db; --muted: #b0a595;
   --line: #45392c; --link: #ffb25a; --link-hover: #ffd29a; --visited: #d9a877;
-  --brand: #e58208; --brand-2: #c76d04; --on-brand: #1c0e00;
+  --brand: #e58208; --brand-2: #c76d04; --on-brand: #1c0e00; --hl: #3b2b10;
   --cat: #8f4207; --cat-2: #7a3705; --on-cat: #fff6ea; --cat-line: #4d2203;
   --title: #2e261d; --title-line: #4a3b2a; --quote: #2a241d; --quote-line: #8a6232; --code: #201c17;
   --pos: #7fd694; --neg: #ff8f85; --focus: #ffb25a; --icon-off: #6b6156; --icon-on: #f7931a;
@@ -108,8 +108,12 @@ ul.plain { list-style: none; margin: 0; padding: 0; } ul.plain li { padding: 1px
 .posts .poster { width: 172px; font-size: 11px; }
 .posts thead th { color: var(--on-cat); background: none; border: 0; padding: 6px 10px; }
 .posts tr.alt td.msg { background: var(--win); }
-.posts tr.post:target td.msg { box-shadow: inset 3px 0 0 var(--brand); }
+/* the post a link points at (#123, or #msg123 as on Bitcointalk): marked on the whole post, both columns */
+.posts tr.post:target td.msg { box-shadow: inset 4px 0 0 var(--brand); background: var(--hl); }
+.posts tr.post:target td.poster { background: var(--hl); }
+.posts tr.post { scroll-margin-top: 6px; }
 .pname { display: block; font-size: 13px; margin-bottom: 2px; }
+.avatar { object-fit: contain; }   /* an avatar that is not square keeps its shape inside the square box */
 .poster .avatar { display: block; margin: 6px 0; max-width: 100%; height: auto; }
 .trust .pos { color: var(--pos); } .trust .neg { color: var(--neg); }
 .ulinks { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 2px 8px; }
@@ -137,8 +141,9 @@ details.merited > summary::-webkit-details-marker { display: none; }
 .code { font-family: var(--mono); background: var(--code); border-color: var(--line); overflow: auto; max-height: 24em; white-space: pre-wrap; }
 .sig { margin-top: 8px; padding-top: 4px; border-top: 1px solid var(--line); font: 13px/1.3 verdana, sans-serif; --pt: 1.3333px; color: var(--muted); box-sizing: border-box; max-height: 42px; overflow: hidden; }
 .sig img { max-height: 37px; width: auto; vertical-align: bottom; }
-.sig.prof { margin: 0; padding: 0; border: 0; width: 0; min-width: 100%; }   /* takes the cell width, never widens it */
-.sig table { border-collapse: collapse; } .grid .sig td, .kv .sig td { padding: 0 2px; border: 0; background: none; }
+.sig.prof { margin: 2px 0 0; padding: 0; border: 0; width: 0; min-width: 100%; }   /* takes the box width, never widens it */
+.sigbox { padding: 0 18px 8px; min-width: 0; overflow: hidden; }
+.sig table { border-collapse: collapse; } .grid .sig td, .kv .sig td, .sigbox .sig td { padding: 0 2px; border: 0; background: none; }
 .sig a { text-decoration: none; }
 .sig table, .sigin > div { white-space: nowrap; }
 .sigin { transform-origin: 0 0; }
@@ -179,7 +184,7 @@ details.merited > summary::-webkit-details-marker { display: none; }
 .chart .axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); padding-top: 2px; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; padding: 6px 10px 10px; }
 .kv th { width: 170px; font-weight: bold; white-space: nowrap; } .kv td, .kv th { padding: 3px 8px; vertical-align: top; text-align: left; }
-.summary { display: flex; gap: 12px; padding: 8px 10px; } .summary .kv { flex: 1; border-collapse: collapse; min-width: 0; } .summary .av { flex: none; }
+.summary { display: flex; gap: 12px; padding: 8px 10px; } .summary .kv { flex: 1; border-collapse: collapse; min-width: 0; width: 100%; } .summary .av { flex: none; } .summary .av .avatar { height: auto; }
 
 /* search, members, results, composer */
 .sform input, .sform select, .composer input[type=text], textarea { font: inherit; padding: 4px 6px; border: 1px solid var(--line); background: var(--win2); color: var(--text); max-width: 100%; }
@@ -225,8 +230,7 @@ textarea#msg { width: 100%; min-height: 220px; font: 13px/1.4 var(--mono); resiz
   /* signatures: long words and links wrap; a banner wider than the screen is scaled down by app.js, and can be
      scrolled sideways when scripts are off */
   .sig { overflow-wrap: anywhere; }
-  .kv tr.sigrow > th, .kv tr.sigrow > td { display: block; width: auto; }   /* the signature gets the full width */
-  .kv tr.sigrow .sig.prof { width: calc(100vw - 56px); min-width: 0; }
+  .sigbox { padding: 0 18px 8px; }
   .acts { justify-content: flex-start; gap: 6px 14px; } .acts a, .ulinks a { padding: 3px 0; }
   /* 16px keeps phones from zooming into a field, and the taller boxes are easier to hit */
   .sform input, .sform select { font-size: 16px; } .grid2 input, .grid2 select, .row input, .dt .dclr { height: 40px; } .row .btn { height: 40px; }

@@ -451,7 +451,12 @@ def trust_html(stats, label="Trust: "):
     f = (stats or {}).get("feedback")
     if not f:
         return ""
-    pos, neu, neg = int(f.get("positive") or 0), int(f.get("neutral") or 0), int(f.get("negative") or 0)
+    pos, neg = int(f.get("positive") or 0), int(f.get("negative") or 0)
+    if "neutral" in f and f["neutral"] is None:
+        # LoyceV's weekly list names this member without a neutral count, and we hold no copy of their trust page yet.
+        return ('<span class="trust" title="No positive or negative feedback counted by the DefaultTrust network. The number of neutral ratings is not known yet: it is filled in once the Trust feedback page of this member has been opened here.">'
+                '%s<b>+%d</b> / =? / <b>-%d</b></span>' % (label, pos, neg))
+    neu = int(f.get("neutral") or 0)
     return ('<span class="trust" title="Trust feedback counted by the DefaultTrust network: %d positive, %d neutral, %d negative">'
             '%s<b class="%s">+%d</b> / =%d / <b class="%s">-%d</b>%s</span>'
             % (pos, neu, neg, label, "pos" if pos else "", pos, neu, "neg" if neg else "", neg,
@@ -1092,7 +1097,7 @@ def optional(path, ttl):
 
 def page_profile(name, q, sub=""):
     quoted = urllib.parse.quote(name, safe="")
-    u = api("/api/users/%s" % quoted, ttl=60)
+    u = api("/api/users/%s" % quoted, {"fresh": 1}, ttl=60)     # fresh: stale profile figures are re-read first
     uname = u.get("username") or name
     uid = u.get("id")
     page = max(1, int(q.get("page", ["1"])[0] or 1))
@@ -1158,13 +1163,13 @@ def page_profile(name, q, sub=""):
         extra.append('<details class="tb"><summary class="titlebg">Posting statistics (from the archive)</summary><div class="two">'
                      '<table class="pollt"><caption>Most active boards</caption><tbody>%s</tbody></table>'
                      '<table class="pollt"><caption>Posts per year</caption><tbody>%s</tbody></table></div></details>' % (brow, yrow))
-    sig = ('<tr class="sigrow"><th scope="row">Signature:</th><td><div class="sig prof"><div class="sigin">%s</div></div></td></tr>' % balanced(u["signature"], tight=True)
+    sig = ('<div class="sigbox"><b>Signature:</b><div class="sig prof"><div class="sigin">%s</div></div></div>' % balanced(u["signature"], tight=True)
            if u.get("signature") else "")
     pg = pager(base, page, pages, "Post history pages")
-    body = ('%s<div class="tb"><h1 class="catbg">Summary - %s</h1><div class="summary"><table class="kv"><tbody>%s%s</tbody></table>'
-            '<div class="av">%s</div></div><div class="pad btns">%s</div></div>%s'
+    body = ('%s<div class="tb"><h1 class="catbg">Summary - %s</h1><div class="summary"><table class="kv"><tbody>%s</tbody></table>'
+            '<div class="av">%s</div></div>%s<div class="pad btns">%s</div></div>%s'
             '<div class="bar">%s</div><div class="tb"><h2 class="catbg">Posts by %s</h2>%s</div><div class="bar">%s</div>'
-            % (crumbs_html([("Members", "/search/users"), (uname, base)]), e(uname), dl, sig, avatar_html(u.get("avatar"), uname, 96),
+            % (crumbs_html([("Members", "/search/users"), (uname, base)]), e(uname), dl, avatar_html(u.get("avatar"), uname, 96), sig,
                actions, "".join(extra), pg, e(uname),
                post_list(pd.get("posts") or [], show_author=False) if pd.get("posts") else '<p class="pad muted">No archived posts.</p>', pg))
     return layout(uname, body, active="members", canonical=base if page == 1 else "%s?page=%d" % (base, page), feed="/feed" + base)

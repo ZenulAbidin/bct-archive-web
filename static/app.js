@@ -35,6 +35,9 @@
   var m = /^#(?:msg)?(\d+)$/.exec(location.hash), t = /^\/threads\/(\d+)/.exec(location.pathname);
   if (m && t && !document.getElementById(m[1]) && !/[?&](post|page|start)=/.test(location.search)) {
     location.replace('/threads/' + t[1] + '?post=' + m[1] + '#' + m[1]);
+  } else if (m && /^#msg/.test(location.hash) && document.getElementById(m[1])) {
+    // Bitcointalk writes #msg123; posts here are #123. Point the address at the post so it is marked and scrolled to.
+    location.replace(location.pathname + location.search + '#' + m[1]);
   }
   // 4. Actions that happen on bitcointalk.org open there in one reusable popup window.
   document.addEventListener('click', function (ev) {
