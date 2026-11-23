@@ -70,12 +70,15 @@
     show();
   });
   // 9. Signatures (posts and profiles) never take more than 42px of height. One that needs more (several lines, a banner
-  // table, block art) is drawn smaller as a whole, so all of it stays visible; links keep working.
+  // table, block art) is drawn smaller as a whole, so all of it stays visible; links keep working. CSS zoom shrinks the
+  // layout box with the drawing, so the signature's box is exactly as big as what it shows; browsers without zoom get a
+  // scale transform and a box height set to match.
+  var zoomOK = !!(window.CSS && CSS.supports && CSS.supports('zoom', '0.5'));
   function fitSigs() {
     document.querySelectorAll('.sig').forEach(function (s) {
       var i = s.firstElementChild;
       if (!i || !i.classList.contains('sigin')) return;
-      i.style.transform = i.style.width = i.style.maxWidth = s.style.height = '';
+      i.style.transform = i.style.zoom = i.style.width = i.style.maxWidth = s.style.height = '';
       s.classList.remove('fit');
       var cs = getComputedStyle(s);
       var room = s.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
@@ -95,8 +98,12 @@
       i.style.maxWidth = Math.round(room * best.m) + 'px';
       i.style.width = (best.w + 1) + 'px';
       var k = Math.min(best.k, room / (best.w + 1), avail / i.offsetHeight);   // measured again at the final width
-      i.style.transform = 'scale(' + k + ')';
-      s.style.height = Math.min(42, Math.ceil(i.offsetHeight * k + edge)) + 'px';
+      if (zoomOK) {
+        i.style.zoom = k;
+      } else {
+        i.style.transform = 'scale(' + k + ')';
+        s.style.height = Math.min(42, Math.ceil(i.offsetHeight * k + edge)) + 'px';
+      }
       s.classList.add('fit');
     });
   }
@@ -105,6 +112,24 @@
     window.addEventListener('load', fitSigs);
     window.addEventListener('resize', fitSigs);
     document.querySelectorAll('.sig img').forEach(function (img) { if (!img.complete) img.addEventListener('load', fitSigs, { once: true }); });
+  }
+  // 10. Hide signatures (like Bitcointalk's "Show signatures" option): this browser only, kept in localStorage.
+  var sbs = document.querySelectorAll('button.sigs');
+  if (sbs.length) {
+    var html = document.documentElement;
+    var sigLabel = function () {
+      sbs.forEach(function (b) { b.textContent = html.getAttribute('data-sigs') === 'hide' ? 'Show signatures' : 'Hide signatures'; b.hidden = false; });
+    };
+    sigLabel();
+    sbs.forEach(function (b) {
+      b.addEventListener('click', function () {
+        var hide = html.getAttribute('data-sigs') !== 'hide';
+        if (hide) html.setAttribute('data-sigs', 'hide'); else html.removeAttribute('data-sigs');
+        try { if (hide) localStorage.setItem('sigs', 'hide'); else localStorage.removeItem('sigs'); } catch (e) {}
+        sigLabel();
+        if (!hide) fitSigs();
+      });
+    });
   }
   // 5. Theme switch (light is the default).
   var b = document.getElementById('theme');

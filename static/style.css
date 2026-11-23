@@ -146,7 +146,8 @@ details.merited > summary::-webkit-details-marker { display: none; }
 .sig table { border-collapse: collapse; } .grid .sig td, .kv .sig td, .sigbox .sig td { padding: 0 2px; border: 0; background: none; }
 .sig a { text-decoration: none; }
 .sig table, .sigin > div { white-space: nowrap; }
-.sigin { transform-origin: 0 0; }
+.sigin { transform-origin: 0 0; width: fit-content; max-width: 100%; }   /* the box is as wide as the signature */
+:root[data-sigs="hide"] .posts .sig { display: none; }   /* the reader's "Hide signatures" choice (posts only) */
 :root[data-theme="dark"] .sig table { background: #ecedf3; color: #1b1b1b; }
 :root[data-theme="dark"] .sig table a { color: #476c8e; }
 /* Bitcointalk line layout (see balanced() in archive_web.py): blocks have no minimum line height, each text run sets its own */

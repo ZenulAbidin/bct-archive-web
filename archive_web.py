@@ -829,7 +829,8 @@ def page_thread(tid, q):
     start = q.get("start", [""])[0]
     page = int(start) // PER_PAGE + 1 if start.isdigit() else max(1, int(q.get("page", ["1"])[0] or 1))
     data = api("/api/posts", {"thread_id": tid, "limit": PER_PAGE, "page": page}, ttl=15)
-    posts = data.get("posts") or []
+    # never show the scraper's page-change markers ("sitemap:<topic>:<offset>") as posts
+    posts = [p for p in data.get("posts") or [] if not str(p.get("id") or "").startswith("sitemap:")]
     thread = data["thread"]
     count = int(thread.get("post_count") or 0)
     pages = max(1, math.ceil(count / PER_PAGE))
@@ -894,9 +895,10 @@ def page_thread(tid, q):
                ICON_POST, here, pid, "" if p.get("position") == 1 else "Re: ", e(title), when(p.get("created_at")), merit, tools,
                here, pid, num(p.get("position")), post_body(p.get("body_html"), tid, on_page), sig, acts))
     pg = pager(base, page, pages, "Topic pages")
-    buttons = '<span class="btns"><a class="btn" href="/compose?topic=%d">Reply</a>%s%s</span>' % (
-        tid, act(bct("action=notify;topic=%d.0" % tid), "Notify", "Get notified about replies", "btn"),
-        act(bct("action=printpage;topic=%d.0" % tid), "Print", "", "btn"))
+    buttons = ('<span class="btns"><button class="btn sigs" type="button" hidden title="Remembered in this browser only">'
+               'Hide signatures</button><a class="btn" href="/compose?topic=%d">Reply</a>%s%s</span>' % (
+                   tid, act(bct("action=notify;topic=%d.0" % tid), "Notify", "Get notified about replies", "btn"),
+                   act(bct("action=printpage;topic=%d.0" % tid), "Print", "", "btn")))
     body = ('%s%s<div class="bar">%s%s</div><div class="tb"><table class="grid posts"><thead><tr class="catbg">'
             '<th scope="col" class="poster">Author</th><th scope="col">Topic: <h1>%s</h1> <span class="sub">(%s posts)</span></th></tr></thead>'
             '<tbody>%s</tbody></table></div><div class="bar">%s%s</div>'
