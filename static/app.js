@@ -135,7 +135,11 @@
   var b = document.getElementById('theme');
   if (b) {
     var root = document.documentElement;
-    var label = function () { b.textContent = root.getAttribute('data-theme') === 'dark' ? 'Light theme' : 'Dark theme'; };
+    // The button is an icon (moon: switch to dark, sun: switch to light); its name is in aria-label and the tooltip.
+    var label = function () {
+      var t = root.getAttribute('data-theme') === 'dark' ? 'Light theme' : 'Dark theme';
+      b.setAttribute('aria-label', t); b.title = t;
+    };
     b.hidden = false; label();
     b.addEventListener('click', function () {
       var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';

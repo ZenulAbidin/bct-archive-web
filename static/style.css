@@ -56,6 +56,11 @@ p { margin: 6px 0; }
 .tabs a:hover, .tabs button:hover { background: var(--cat-2); color: var(--on-cat); text-decoration: none; }
 .tabs a.on { background: var(--brand); color: var(--on-brand); }
 .tabs button { margin-left: auto; border-right: 0; border-left: 1px solid var(--cat-line); }
+/* theme switch: an icon for the theme it switches to (CSS picks it, so it is right before any script runs) */
+#theme { display: flex; align-items: center; justify-content: center; min-width: 38px; }
+#theme[hidden] { display: none; }
+#theme svg { display: block; }
+:root[data-theme="dark"] #theme .ico-moon, :root:not([data-theme="dark"]) #theme .ico-sun { display: none; }
 .crumbs { margin: 0 0 8px; }
 .crumbs a[aria-current] { color: var(--text); }
 

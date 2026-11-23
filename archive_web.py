@@ -564,7 +564,7 @@ def layout(title, body, q="", canonical="", noindex=False, active="", scripts=()
 <button type="submit">Search</button>
 </form>
 </header>
-<nav class="tabs" aria-label="Main">%s%s%s%s%s%s<button id="theme" type="button" hidden>Dark theme</button></nav>
+<nav class="tabs" aria-label="Main">%s%s%s%s%s%s<button id="theme" type="button" hidden aria-label="Dark theme" title="Dark theme"><svg class="ico-moon" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z" fill="currentColor"/></svg><svg class="ico-sun" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1.5v2.5M12 20v2.5M1.5 12H4M20 12h2.5M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/></g></svg></button></nav>
 <main id="main">
 %s
 </main>
