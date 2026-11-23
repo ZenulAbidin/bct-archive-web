@@ -4,3 +4,4 @@ Disallow: /search/
 Disallow: /history/
 Disallow: /compose
 Disallow: /seen/
+Disallow: /profile/*/trust

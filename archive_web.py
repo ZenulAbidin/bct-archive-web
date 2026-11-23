@@ -863,8 +863,8 @@ def page_thread(tid, q):
         if uid:
             # Trust on its own line under the avatar, as on the forum: Trust: +7 / =2 / -0 (links to the trust page).
             score = trust_html(u.get("stats"), "")
-            tr = ('<a class="pop utrust" href="%s" target="_blank" rel="noopener nofollow" title="View or leave trust feedback">Trust: %s</a>'
-                  % (e(bct("action=trust;u=%s" % uid)), score or '<span class="muted">not rated</span>'))
+            tr = ('<a class="utrust" href="/profile/%s/trust" rel="nofollow" title="Trust feedback and trust lists">Trust: %s</a>'
+                  % (urllib.parse.quote(name if name != "(unknown)" else str(uid), safe=""), score or '<span class="muted">not rated</span>'))
             ulinks = '<div class="ulinks">%s %s</div>' % (
                 '<a class="pop pm" href="%s" target="_blank" rel="noopener nofollow" title="Send this member a personal message" aria-label="Send a personal message">%s</a>'
                 % (e(bct("action=pm;sa=send;u=%s" % uid)), ICON_PM),
@@ -1126,7 +1126,8 @@ def page_profile(name, q, sub=""):
     elif u.get("created_at"):
         facts.append(("First archived post", when(u["created_at"], short=True)))
     tr = trust_html(u.get("stats"), "")
-    facts.append(("Trust", tr or '<span class="muted">no feedback counted by DefaultTrust</span>'))
+    facts.append(("Trust", '<a href="%s/trust" rel="nofollow" title="Trust feedback and trust lists">%s</a>'
+                  % (base, tr or '<span class="muted">no feedback counted by DefaultTrust</span>')))
     st_ = u.get("stats") or {}
     facts.append(("Trust lists", "%sincluded by %s member%s, excluded by %s" % (
         "DT%d member; " % st_["dt"] if st_.get("dt") else "", num(st_.get("pos") or 0), "" if st_.get("pos") == 1 else "s", num(st_.get("neg") or 0))))
@@ -1134,7 +1135,7 @@ def page_profile(name, q, sub=""):
     actions = " ".join([
         '<a class="btn" href="%s/stats">Statistics</a>' % base,
         act(bct("action=pm;sa=send;u=%s" % uid), "Send PM", "", "btn"),
-        '<a class="btn" href="%s/trust">Trust feedback</a>' % base,
+        '<a class="btn" href="%s/trust" rel="nofollow">Trust</a>' % base,
         act(bct("action=merit;u=%s" % uid), "Merit", "Merit sent and received", "btn"),
         act(bct("action=profile;u=%s;sa=showPosts" % uid), "All posts", "", "btn"),
         act(bct("action=profile;u=%s;sa=statPanel" % uid), "Forum stats", "", "btn"),
@@ -1149,11 +1150,11 @@ def page_profile(name, q, sub=""):
                      '<tr><th scope="row">Included by (%d)</th><td>%s</td></tr><tr><th scope="row">Excluded by (%d)</th><td>%s</td></tr>'
                      '<tr><th scope="row">Includes (%d)</th><td>%s</td></tr><tr><th scope="row">Excludes (%d)</th><td>%s</td></tr>'
                      '</tbody></table><p class="pad small muted">%sNames in <b>bold</b> are DefaultTrust members (DT1 or DT2). '
-                     'Feedback comments are only visible to signed-in members on bitcointalk.org; use Trust feedback above.</p>'
+                     'Feedback with comments is on the <a href="%s/trust" rel="nofollow">Trust</a> page.</p>'
                      '<p class="pad small">%s</p></details>'
                      % (len(lists["trusted_by"]), names("trusted_by"), len(lists["distrusted_by"]), names("distrusted_by"),
                         len(lists["trusts"]), names("trusts"), len(lists["distrusts"]), names("distrusts"),
-                        "%s is a DT%d member. " % (e(uname), lists["dt"]) if lists.get("dt") else "",
+                        "%s is a DT%d member. " % (e(uname), lists["dt"]) if lists.get("dt") else "", base,
                         act(bct("action=trust;settings"), "Trust settings", "Edit your own trust list on bitcointalk.org")))
     if stats and stats.get("boards"):
         top = max(b["posts"] for b in stats["boards"]) or 1
@@ -1237,6 +1238,7 @@ def page_user_stats(name):
 
 
 def page_user_trust(name):
+    """A member's trust, as on Bitcointalk's trust page: score, received and sent feedback, DefaultTrust lists."""
     quoted = urllib.parse.quote(name, safe="")
     u = api("/api/users/%s" % quoted, ttl=60)
     uname = u.get("username") or name
@@ -1246,11 +1248,18 @@ def page_user_trust(name):
         fb = api("/api/trust/%s/feedback" % quoted, ttl=20)
     except (NotFound, Upstream):
         fb = {"available": False, "pending": True}
+    lists = optional("/api/trust/%s/lists" % quoted, 600) or {}
 
-    def table(key, heading, col):
+    def stamp(ts, short=True):
+        try:
+            return when(datetime.fromtimestamp(int(ts), timezone.utc).isoformat(), short=short) if ts else ""
+        except (TypeError, ValueError, OverflowError):
+            return ""
+
+    def table(key, heading, col, anchor):
         rows = fb.get(key) or []
         if not rows:
-            return '<div class="tb"><h2 class="titlebg">%s (0)</h2><p class="pad muted">None.</p></div>' % heading
+            return '<div class="tb" id="%s"><h2 class="titlebg">%s (0)</h2><p class="pad muted">None.</p></div>' % (anchor, heading)
         body = "".join(
             '<tr><td>%s</td><td class="nw">%s</td><td class="nw"><b class="%s">%s</b></td><td>%s</td><td class="cm">%s</td></tr>'
             % ('<b title="DT%d member">%s</b>' % (r["dt"], user_link(r["username"])) if r.get("dt") else user_link(r["username"]),
@@ -1259,26 +1268,62 @@ def page_user_trust(name):
                '<a href="%s" rel="noopener nofollow ugc">Reference</a>' % e(r["reference"]) if str(r.get("reference") or "").startswith(("http://", "https://")) else "",
                e(r.get("comment") or ""))
             for r in rows)
-        return ('<div class="tb"><h2 class="titlebg">%s (%d)</h2><div class="scroll"><table class="grid fb"><thead><tr class="titlebg">'
+        return ('<div class="tb" id="%s"><h2 class="titlebg">%s (%d)</h2><div class="scroll"><table class="grid fb"><thead><tr class="titlebg">'
                 '<th scope="col">%s</th><th scope="col">Date</th><th scope="col">Rating</th>'
                 '<th scope="col">Reference</th><th scope="col">Comments</th></tr></thead><tbody>%s</tbody></table></div></div>'
-                % (heading, len(rows), col, body))
+                % (anchor, heading, len(rows), col, body))
+
+    def tally(key):
+        rows = fb.get(key) or []
+        c = {k: sum(1 for r in rows if r.get("rating") == k) for k in ("positive", "neutral", "negative")}
+        return ('%s: <b class="pos">%s</b> positive, %s neutral, <b class="neg">%s</b> negative'
+                % ('<a href="#%s">%s</a>' % (key, num(len(rows))), num(c["positive"]), num(c["neutral"]), num(c["negative"])))
+
     tr = trust_html(u.get("stats"), "")
+    st_ = u.get("stats") or {}
+    dt = lists.get("dt") or st_.get("dt")
+    facts = [("Trust", tr or '<span class="muted">no feedback counted by DefaultTrust</span>'),
+             ("DefaultTrust", "DT%d member" % dt if dt else '<span class="muted">not a DefaultTrust member</span>'),
+             ("On trust lists", '<a href="#lists">included by %s, excluded by %s</a>'
+              % (num(len(lists.get("trusted_by") or [])) if lists else num(st_.get("pos") or 0),
+                 num(len(lists.get("distrusted_by") or [])) if lists else num(st_.get("neg") or 0)))]
     if fb.get("available"):
-        note = ('<p class="small muted">Read from bitcointalk.org %s%s. "Trusted" and "untrusted" follow that viewer\'s trust list, as on Bitcointalk. '
-                '%sBold names are DefaultTrust members.</p>'
-                % (when(fb.get("fetched_at")) or "recently", ", as seen by %s" % e(fb["viewed_as"]) if fb.get("viewed_as") else "",
-                   "A newer copy is being fetched; reload in a minute. " if fb.get("pending") else ""))
-        tables = table("trusted", "Trusted feedback", "From") + table("untrusted", "Untrusted feedback", "From") + table("sent", "Sent feedback", "To")
-    else:
-        note = '<p>The feedback for this member is being fetched from bitcointalk.org. Reload this page in a minute.</p>'
-        tables = ""
-    body = ('%s<div class="tb"><h1 class="catbg">Trust feedback - %s</h1><div class="pad"><p><b>Trust:</b> %s</p>%s<p class="btns">%s %s</p></div></div>%s'
-            % (crumbs_html([("Members", "/search/users"), (uname, base), ("Trust feedback", "")]), e(uname),
-               tr or '<span class="muted">no feedback counted by DefaultTrust</span>', note,
+        facts += [("Trusted feedback", tally("trusted")), ("Untrusted feedback", tally("untrusted")),
+                  ("Sent feedback", '<a href="#sent">%s</a>' % num(len(fb.get("sent") or [])))]
+    asof = []
+    if fb.get("available"):
+        asof.append("Feedback copied from bitcointalk.org on %s%s."
+                    % (when(fb.get("fetched_at")) or "an earlier date", " (a newer copy is on its way; reload in a minute)" if fb.get("pending") else ""))
+    if lists.get("lists_as_of") or lists.get("scores_as_of"):
+        asof.append("Trust score and trust lists: LoyceV's weekly DefaultTrust snapshot of %s, refreshed once a week."
+                    % (stamp(lists.get("scores_as_of") or lists.get("lists_as_of"))))
+    dl = "".join('<tr><th scope="row">%s:</th><td>%s</td></tr>' % f for f in facts)
+    head = ('<div class="tb"><h1 class="catbg">Trust - %s</h1><div class="pad"><table class="kv tsum"><tbody>%s</tbody></table>'
+            '<p class="small muted">%s "Trusted" and "untrusted" follow the default trust list, as on Bitcointalk. Bold names are DefaultTrust members.</p>'
+            '<p class="btns">%s %s <a class="small vob" href="%s" target="_blank" rel="noopener nofollow">View on Bitcointalk%s</a></p></div></div>'
+            % (e(uname), dl, " ".join(asof),
                act(bct("action=trust;u=%s" % uid), "Leave feedback", "Opens the trust page on bitcointalk.org", "btn"),
-               act(bct("action=trust;settings"), "Trust settings", "", "btn"), tables))
-    return layout("Trust feedback - %s" % uname, body, active="members", noindex=True)
+               act(bct("action=trust;settings"), "Trust settings", "Edit your own trust list on bitcointalk.org", "btn"),
+               e(bct("action=trust;u=%s" % uid)), ICON_EXT))
+    if fb.get("available"):
+        tables = (table("trusted", "Trusted feedback", "From", "trusted") + table("untrusted", "Untrusted feedback", "From", "untrusted")
+                  + table("sent", "Sent feedback", "To", "sent"))
+    else:
+        tables = ('<div class="tb"><p class="pad">The feedback for this member is being copied from bitcointalk.org. '
+                  'Reload this page in a minute.</p></div>')
+
+    def names(key):
+        return ", ".join('<b title="DT%d member">%s</b>' % (x["dt"], user_link(x["username"])) if x.get("dt") else user_link(x["username"])
+                         for x in lists.get(key) or []) or '<span class="muted">nobody</span>'
+    trust_lists = ('<div class="tb" id="lists"><h2 class="titlebg">Trust lists (DefaultTrust network)</h2><table class="grid kv"><tbody>'
+                   '<tr><th scope="row">Included by (%d)</th><td>%s</td></tr><tr><th scope="row">Excluded by (%d)</th><td>%s</td></tr>'
+                   '<tr><th scope="row">Includes (%d)</th><td>%s</td></tr><tr><th scope="row">Excludes (%d)</th><td>%s</td></tr>'
+                   '</tbody></table><p class="pad small muted">From LoyceV\'s weekly snapshot%s. Names in <b>bold</b> are DefaultTrust members (DT1 or DT2).</p></div>'
+                   % (len(lists.get("trusted_by") or []), names("trusted_by"), len(lists.get("distrusted_by") or []), names("distrusted_by"),
+                      len(lists.get("trusts") or []), names("trusts"), len(lists.get("distrusts") or []), names("distrusts"),
+                      " of %s" % stamp(lists.get("lists_as_of")) if lists.get("lists_as_of") else "")) if lists else ""
+    body = '%s%s%s%s' % (crumbs_html([("Members", "/search/users"), (uname, base), ("Trust", "")]), head, tables, trust_lists)
+    return layout("Trust - %s" % uname, body, active="members", noindex=True)
 
 
 PERIODS = (("24h", "24 hours"), ("7d", "7 days"), ("30d", "30 days"))

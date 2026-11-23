@@ -268,3 +268,13 @@ textarea#msg { width: 100%; min-height: 220px; font: 13px/1.4 var(--mono); resiz
 .poll .pollt td.pl { overflow-wrap: anywhere; } .poll .pollt td.n { white-space: nowrap; text-align: right; width: 1%; }
 .poll .pnote { margin: 6px 0; } .poll .btns { margin: 6px 0 2px; }
 @media (max-width: 760px) { .poll .pollt td.pb { width: 30%; } }
+.btns .vob { display: inline-block; vertical-align: middle; margin-left: 4px; }
+/* trust feedback on phones: one card per rating (from, date and rating on one line, then reference and comment) */
+@media (max-width: 760px) {
+  .fb thead { display: none; }
+  .fb, .fb tbody { display: block; }
+  .fb tr { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  .fb td, table.grid.fb tbody tr td { display: inline; padding: 0; border: 0; background: none; }
+  .fb td:nth-child(4):empty { display: none; }
+  .fb td.cm { display: block; flex-basis: 100%; min-width: 0; }
+}
