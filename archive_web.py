@@ -452,15 +452,16 @@ def trust_html(stats, label="Trust: "):
     if not f:
         return ""
     pos, neg = int(f.get("positive") or 0), int(f.get("negative") or 0)
-    if "neutral" in f and f["neutral"] is None:
-        # LoyceV's weekly list names this member without a neutral count, and we hold no copy of their trust page yet.
-        return ('<span class="trust" title="No positive or negative feedback counted by the DefaultTrust network. The number of neutral ratings is not known yet: it is filled in once the Trust feedback page of this member has been opened here.">'
-                '%s<b>+%d</b> / =? / <b>-%d</b></span>' % (label, pos, neg))
+    if not pos and not neg:
+        # Bitcointalk shows plain "neutral" when no trusted member left positive or negative feedback.
+        return ('<span class="trust" title="No positive or negative feedback counted by the DefaultTrust network">%sneutral</span>' % label)
     neu = int(f.get("neutral") or 0)
+    mark = f.get("mark") or ("!!!" if f.get("warning") else "")
     return ('<span class="trust" title="Trust feedback counted by the DefaultTrust network: %d positive, %d neutral, %d negative">'
-            '%s<b class="%s">+%d</b> / =%d / <b class="%s">-%d</b>%s</span>'
-            % (pos, neu, neg, label, "pos" if pos else "", pos, neu, "neg" if neg else "", neg,
-               ' <b class="neg" title="Warning: trade with extreme caution">!!!</b>' if f.get("warning") else ""))
+            '%s%s<b class="%s">+%d</b> / =%d / <b class="%s">-%d</b></span>'
+            % (pos, neu, neg, label,
+               '<b class="neg" title="Warning: trade with extreme caution">!!!</b>: ' if mark == "!!!" else "# " if mark == "#" else "",
+               "pos" if pos else "", pos, neu, "neg" if neg else "", neg))
 
 
 def avatar_html(url, name, size):
@@ -1117,8 +1118,10 @@ def page_profile(name, q, sub=""):
     facts.append(("Posts in archive", num(u.get("post_count"))))
     if isinstance(u.get("activity"), int) and u["activity"] >= 0:
         facts.append(("Activity", num(u["activity"])))
-    facts.append(("Merit", "%s received%s" % (num(u.get("merit") or 0),
-                                              ", %s sent" % num(u["merit_sent"]) if u.get("merit_sent") is not None else "")))
+    facts.append(("Merit", "%s · %s" % (
+        act(bct("action=merit;u=%s" % uid), "%s received%s" % (num(u.get("merit") or 0), ", %s sent" % num(u["merit_sent"]) if u.get("merit_sent") is not None else ""),
+            "Merit sent and received, on bitcointalk.org"),
+        act(u.get("merit_history_url") or "https://loyce.club/Merit/history/%s.html" % uid, "history", "LoyceV's merit history"))))
     if stats:
         facts.append(("Topics posted in", num(stats.get("topics"))))
         facts.append(("First archived post", when(stats.get("first"), short=True)))
@@ -1129,17 +1132,13 @@ def page_profile(name, q, sub=""):
     facts.append(("Trust", '<a href="%s/trust" rel="nofollow" title="Trust feedback and trust lists">%s</a>'
                   % (base, tr or '<span class="muted">no feedback counted by DefaultTrust</span>')))
     st_ = u.get("stats") or {}
-    facts.append(("Trust lists", "%sincluded by %s member%s, excluded by %s" % (
-        "DT%d member; " % st_["dt"] if st_.get("dt") else "", num(st_.get("pos") or 0), "" if st_.get("pos") == 1 else "s", num(st_.get("neg") or 0))))
+    facts.append(("Trust lists", '%s<a href="%s/trust#lists" rel="nofollow">included by %s member%s, excluded by %s</a>' % (
+        "DT%d member; " % st_["dt"] if st_.get("dt") else "", base, num(st_.get("pos") or 0), "" if st_.get("pos") == 1 else "s", num(st_.get("neg") or 0))))
     dl = "".join('<tr><th scope="row">%s:</th><td>%s</td></tr>' % f for f in facts)
     actions = " ".join([
         '<a class="btn" href="%s/stats">Statistics</a>' % base,
         act(bct("action=pm;sa=send;u=%s" % uid), "Send PM", "", "btn"),
-        '<a class="btn" href="%s/trust" rel="nofollow">Trust</a>' % base,
-        act(bct("action=merit;u=%s" % uid), "Merit", "Merit sent and received", "btn"),
         act(bct("action=profile;u=%s;sa=showPosts" % uid), "All posts", "", "btn"),
-        act(bct("action=profile;u=%s;sa=statPanel" % uid), "Forum stats", "", "btn"),
-        act(u.get("merit_history_url") or "https://loyce.club/Merit/history/%s.html" % uid, "Merit history", "LoyceV's merit history", "btn"),
         act(u.get("profile_on_bitcointalk") or bct("action=profile;u=%s" % uid), "Original profile", "", "btn")])
     extra = []
     if lists and any(lists.values()):
@@ -1294,12 +1293,16 @@ def page_user_trust(name):
     if fb.get("available"):
         asof.append("Feedback copied from bitcointalk.org on %s%s."
                     % (when(fb.get("fetched_at")) or "an earlier date", " (a newer copy is on its way; reload in a minute)" if fb.get("pending") else ""))
-    if lists.get("lists_as_of") or lists.get("scores_as_of"):
-        asof.append("Trust score and trust lists: LoyceV's weekly DefaultTrust snapshot of %s, refreshed once a week."
-                    % (stamp(lists.get("scores_as_of") or lists.get("lists_as_of"))))
+    src = ((st_.get("feedback") or {}).get("source"))
+    if src == "loyce" and lists.get("scores_as_of"):
+        asof.append("Trust score: LoyceV's weekly list of %s, the score Bitcointalk shows." % stamp(lists["scores_as_of"]))
+    elif src == "trust page":
+        asof.append("Trust score: counted from the copied feedback (this member is not on LoyceV's weekly list).")
+    if lists.get("lists_as_of"):
+        asof.append("Trust lists: LoyceV's weekly snapshot of %s." % stamp(lists["lists_as_of"]))
     dl = "".join('<tr><th scope="row">%s:</th><td>%s</td></tr>' % f for f in facts)
     head = ('<div class="tb"><h1 class="catbg">Trust - %s</h1><div class="pad"><table class="kv tsum"><tbody>%s</tbody></table>'
-            '<p class="small muted">%s "Trusted" and "untrusted" follow the default trust list, as on Bitcointalk. Bold names are DefaultTrust members.</p>'
+            '<p class="small muted">%s "Trusted" and "untrusted" follow DefaultTrust, as Bitcointalk shows them to guests; a member\'s own trust list only changes what they see when logged in there. Bold names are DefaultTrust members.</p>'
             '<p class="btns">%s %s <a class="small vob" href="%s" target="_blank" rel="noopener nofollow">View on Bitcointalk%s</a></p></div></div>'
             % (e(uname), dl, " ".join(asof),
                act(bct("action=trust;u=%s" % uid), "Leave feedback", "Opens the trust page on bitcointalk.org", "btn"),

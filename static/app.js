@@ -7,18 +7,54 @@
     sfmt = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
     tfmt = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' });
   } catch (e) {}
+  var zone = '';
+  try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+  function local(t) {  // times of day get a "(local time)" label; plain dates need none
+    var s = document.createElement('span');
+    s.className = 'tz';
+    s.textContent = ' (local time)';
+    t.after(s);
+  }
   document.querySelectorAll('time[datetime]').forEach(function (t) {
     var d = new Date(t.getAttribute('datetime'));
     if (isNaN(d) || !fmt) return;
-    t.title = t.textContent;
+    var withTime = /UTC$/.test(t.textContent);
+    t.title = t.textContent + (zone ? ' · shown in your time zone (' + zone + ')' : '');
     if (d.toDateString() === today && tfmt) {  // like the forum itself: "Today at 06:35 AM"
       var b = document.createElement('b');
       b.textContent = 'Today';
       t.textContent = '';
       t.append(b, ' at ' + tfmt.format(d));
+      local(t);
       return;
     }
-    t.textContent = (/UTC$/.test(t.textContent) ? fmt : sfmt).format(d);
+    t.textContent = (withTime ? fmt : sfmt).format(d);
+    if (withTime) local(t);
+  });
+  // Quote headers ("Quote from: X on November 23, 2026, 06:13:11 AM", or "on Today at ...") are Bitcointalk's own
+  // text, in UTC. The quoted post's own date is used when it is on this page; otherwise the date in the text.
+  var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  document.querySelectorAll('.quoteheader > a[href*="#"]').forEach(function (a) {
+    var txt = a.textContent, m = / on (.+)$/.exec(txt);
+    if (!m || !fmt) return;
+    var d = null, src = document.getElementById(a.getAttribute('href').split('#')[1]);
+    var tm = src && src.querySelector('.phead time[datetime]');
+    if (tm) d = new Date(tm.getAttribute('datetime'));
+    var x = /^([A-Z][a-z]+) (\d{1,2}), (\d{4}), (\d{1,2}):(\d{2}):(\d{2}) ([AP]M)$/.exec(m[1]);
+    if (!tm && x && MONTHS.indexOf(x[1]) >= 0) {
+      d = new Date(Date.UTC(+x[3], MONTHS.indexOf(x[1]), +x[2], (+x[4] % 12) + (x[7] === 'PM' ? 12 : 0), +x[5], +x[6]));
+    }
+    var note = document.createElement('span');
+    note.className = 'tz';
+    if (!d || isNaN(d)) {  // "Today at ..." of a post not on this page: the day is unknown, the time is UTC
+      note.textContent = ' (UTC)';
+      a.append(note);
+      return;
+    }
+    a.title = m[1].replace(/\s+/g, ' ') + ' UTC';
+    a.textContent = txt.slice(0, m.index) + ' on ' + fmt.format(d);
+    note.textContent = ' (local time)';
+    a.append(note);
   });
   // 2. Images that cannot be loaded become a short note instead of a broken icon.
   function gone(img) {

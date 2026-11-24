@@ -278,3 +278,4 @@ textarea#msg { width: 100%; min-height: 220px; font: 13px/1.4 var(--mono); resiz
   .fb td:nth-child(4):empty { display: none; }
   .fb td.cm { display: block; flex-basis: 100%; min-width: 0; }
 }
+.tz { color: var(--muted); font-size: 0.9em; font-weight: normal; white-space: nowrap; }
